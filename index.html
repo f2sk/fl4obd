@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>FL4 OBD MONITOR</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-height:100vh;}
+.app{max-width:420px;margin:0 auto;padding:10px;}
+
+/* HEADER */
+.hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:8px 0 10px;border-bottom:1px solid #1a2a3a;margin-bottom:10px;}
+.logo{font-size:11px;letter-spacing:3px;color:#3a8aff;font-weight:bold;}
+.hdr-r{display:flex;align-items:center;gap:7px;}
+.dot{width:9px;height:9px;border-radius:50%;background:#1e2e3e;
+  border:1.5px solid #2a4a6a;transition:all .4s;}
+.dot.on {background:#00ff88;border-color:#00cc66;box-shadow:0 0 7px #00ff8860;}
+.dot.chk{background:#ffaa00;border-color:#cc8800;animation:blink 1s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.stt{font-size:10px;letter-spacing:1px;color:#2a5a7a;}
+
+/* LOG */
+.log-wrap{position:relative;margin-bottom:8px;}
+.log{background:#040810;border:1px solid #1a2a3a;border-radius:6px;
+  padding:5px 9px 5px 9px;font-size:10px;color:#2a6a4a;height:60px;
+  overflow-y:auto;line-height:1.7;}
+.log .e {color:#cc3333;}
+.log .ok{color:#22cc77;}
+.log .tx{color:#3377cc;}
+.log-btn{position:absolute;top:4px;right:5px;
+  padding:2px 7px;background:#0d1e30;border:1px solid #2a4a6a;
+  border-radius:4px;color:#3a7aaa;font-family:'Courier New',monospace;
+  font-size:9px;letter-spacing:1px;cursor:pointer;transition:all .15s;z-index:1;}
+.log-btn:hover{border-color:#4a9eff;color:#4a9eff;}
+.log-clr{right:54px;}
+
+/* CONNECT */
+.conn-btn{width:100%;padding:10px;background:#0d1e30;border:1px solid #2a5a8c;
+  border-radius:7px;color:#4a9eff;font-family:'Courier New',monospace;
+  font-size:11px;letter-spacing:2px;cursor:pointer;margin-bottom:10px;transition:all .2s;}
+.conn-btn:hover  {background:#122840;border-color:#4a9eff;}
+.conn-btn:active {transform:scale(.98);}
+.conn-btn:disabled{opacity:.35;cursor:not-allowed;}
+
+/* 2x2 ANALOG METERS */
+.meters-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+.meter-card{background:#0a1520;border:1px solid #1a2a3a;border-radius:10px;
+  padding:8px 6px 6px;display:flex;flex-direction:column;align-items:center;}
+.m-lbl{font-size:9px;letter-spacing:2px;color:#2a5a7a;margin-bottom:4px;}
+.m-svg{width:168px;height:100px;}
+.m-val{font-size:26px;font-weight:bold;letter-spacing:1px;line-height:1;margin-top:2px;}
+.m-unit{font-size:9px;color:#2a5a7a;letter-spacing:1px;margin-top:1px;}
+.m-val.rpm{color:#4a9eff;}
+.m-val.spd{color:#00ff88;}
+.m-val.pwr{color:#ffaa00;}
+.m-val.soc{color:#00ffcc;}
+
+/* SUB ROW */
+.sub-row{display:flex;justify-content:space-between;background:#0a1520;
+  border:1px solid #1a2a3a;border-radius:8px;padding:7px 10px;margin-bottom:8px;}
+.sub-item{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.sub-item .sl{font-size:9px;color:#2a5a7a;letter-spacing:1px;}
+.sub-item .sv{font-size:13px;font-weight:bold;color:#c8d8e8;}
+.sub-item .sv.cur{color:#cc44ff;}
+
+.demo-note{text-align:center;font-size:9px;color:#1a3a5a;letter-spacing:1px;padding:4px 0;}
+
+::-webkit-scrollbar{width:3px;}
+::-webkit-scrollbar-track{background:#040810;}
+::-webkit-scrollbar-thumb{background:#1a3a5a;border-radius:2px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="hdr">
+  <div class="logo">FL4 OBD MONITOR</div>
+  <div class="hdr-r">
+    <span class="stt" id="sttTxt">DISCONNECTED</span>
+    <div class="dot" id="dot"></div>
+  </div>
+</div>
+
+<button class="conn-btn" id="connBtn" onclick="toggleConnect()">[ BLUETOOTH 接続 ]</button>
+
+<div class="log-wrap">
+  <div class="log" id="logBox">
+    <span style="color:#1a5a3a">▶ Web Bluetooth 準備完了 — Chrome + HTTPS必須</span><br>
+  </div>
+  <button class="log-btn log-clr" onclick="clearLog()">CLR</button>
+  <button class="log-btn" onclick="downloadLog()">LOG↓</button>
+</div>
+
+<!-- 2x2 ANALOG METERS -->
+<div class="meters-grid">
+
+  <!-- RPM -->
+  <div class="meter-card">
+    <div class="m-lbl">ENGINE RPM</div>
+    <svg class="m-svg" viewBox="0 0 168 100">
+      <defs>
+        <linearGradient id="gRpm" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#1a5aff"/>
+          <stop offset="100%" stop-color="#4a9eff"/>
+        </linearGradient>
+      </defs>
+      <path d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="#1a2a3a" stroke-width="8" stroke-linecap="round"/>
+      <g id="ticksRpm"></g>
+      <path id="arcRpm" d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="url(#gRpm)" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 207.3"/>
+      <line id="needleRpm" x1="84" y1="90" x2="84" y2="32" stroke="#4a9eff" stroke-width="2" stroke-linecap="round" transform="rotate(0,84,90)" opacity="0.8"/>
+      <circle cx="84" cy="90" r="4" fill="#4a9eff" opacity="0.8"/>
+      <text x="18"  y="98" fill="#1e4a7a" font-size="8" font-family="Courier New" text-anchor="middle">0</text>
+      <text x="150" y="98" fill="#1e4a7a" font-size="8" font-family="Courier New" text-anchor="middle">8k</text>
+    </svg>
+    <div class="m-val rpm" id="valRpm">0</div>
+    <div class="m-unit">rpm</div>
+  </div>
+
+  <!-- SPEED -->
+  <div class="meter-card">
+    <div class="m-lbl">SPEED</div>
+    <svg class="m-svg" viewBox="0 0 168 100">
+      <defs>
+        <linearGradient id="gSpd" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#00aa55"/>
+          <stop offset="100%" stop-color="#00ff88"/>
+        </linearGradient>
+      </defs>
+      <path d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="#1a2a3a" stroke-width="8" stroke-linecap="round"/>
+      <g id="ticksSpd"></g>
+      <path id="arcSpd" d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="url(#gSpd)" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 207.3"/>
+      <line id="needleSpd" x1="84" y1="90" x2="84" y2="32" stroke="#00ff88" stroke-width="2" stroke-linecap="round" transform="rotate(0,84,90)" opacity="0.8"/>
+      <circle cx="84" cy="90" r="4" fill="#00ff88" opacity="0.8"/>
+      <text x="18"  y="98" fill="#1e4a3a" font-size="8" font-family="Courier New" text-anchor="middle">0</text>
+      <text x="150" y="98" fill="#1e4a3a" font-size="8" font-family="Courier New" text-anchor="middle">180</text>
+    </svg>
+    <div class="m-val spd" id="valSpd">0</div>
+    <div class="m-unit">km/h</div>
+  </div>
+
+  <!-- BATTERY PWR (bipolar -50..+50 kW) -->
+  <div class="meter-card">
+    <div class="m-lbl">BATTERY PWR</div>
+    <svg class="m-svg" viewBox="0 0 168 100">
+      <defs>
+        <linearGradient id="gPwrP" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#886600"/>
+          <stop offset="100%" stop-color="#ffaa00"/>
+        </linearGradient>
+        <linearGradient id="gPwrN" x1="100%" y1="0%" x2="0%" y2="0%">
+          <stop offset="0%" stop-color="#7722aa"/>
+          <stop offset="100%" stop-color="#cc44ff"/>
+        </linearGradient>
+      </defs>
+      <path d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="#1a2a3a" stroke-width="8" stroke-linecap="round"/>
+      <g id="ticksPwr"></g>
+      <path id="arcPwrN" d="M84,24 A66,66 0 0,0 18,90" fill="none" stroke="url(#gPwrN)" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 103.65"/>
+      <path id="arcPwrP" d="M84,24 A66,66 0 0,1 150,90" fill="none" stroke="url(#gPwrP)" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 103.65"/>
+      <line x1="84" y1="24" x2="84" y2="31" stroke="#3a5a7a" stroke-width="1.5"/>
+      <line id="needlePwr" x1="84" y1="90" x2="84" y2="32" stroke="#ffaa00" stroke-width="2" stroke-linecap="round" transform="rotate(0,84,90)" opacity="0.8"/>
+      <circle cx="84" cy="90" r="4" fill="#ffaa00" opacity="0.8"/>
+      <text x="16"  y="98" fill="#3a3a1a" font-size="8" font-family="Courier New" text-anchor="middle">-50</text>
+      <text x="152" y="98" fill="#3a3a1a" font-size="8" font-family="Courier New" text-anchor="middle">+50</text>
+      <text x="84"  y="18" fill="#3a3a1a" font-size="8" font-family="Courier New" text-anchor="middle">0</text>
+    </svg>
+    <div class="m-val pwr" id="valPwr">0.0</div>
+    <div class="m-unit">kW</div>
+  </div>
+
+  <!-- SOC (0..100%) -->
+  <div class="meter-card">
+    <div class="m-lbl">STATE OF CHARGE</div>
+    <svg class="m-svg" viewBox="0 0 168 100">
+      <defs>
+        <linearGradient id="gSoc" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stop-color="#cc4400"/>
+          <stop offset="40%"  stop-color="#ffaa00"/>
+          <stop offset="100%" stop-color="#00ffcc"/>
+        </linearGradient>
+      </defs>
+      <path d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="#1a2a3a" stroke-width="8" stroke-linecap="round"/>
+      <g id="ticksSoc"></g>
+      <path id="arcSoc" d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="url(#gSoc)" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 207.3"/>
+      <line id="needleSoc" x1="84" y1="90" x2="84" y2="32" stroke="#00ffcc" stroke-width="2" stroke-linecap="round" transform="rotate(0,84,90)" opacity="0.8"/>
+      <circle cx="84" cy="90" r="4" fill="#00ffcc" opacity="0.8"/>
+      <text x="18"  y="98" fill="#2a3a2a" font-size="8" font-family="Courier New" text-anchor="middle">0</text>
+      <text x="150" y="98" fill="#2a3a2a" font-size="8" font-family="Courier New" text-anchor="middle">100</text>
+    </svg>
+    <div class="m-val soc" id="valSoc">--.-</div>
+    <div class="m-unit">%</div>
+  </div>
+
+</div>
+
+<!-- SUB ROW: VBAT / SYS V / CURRENT / RUNTIME -->
+<div class="sub-row">
+  <div class="sub-item">
+    <span class="sl">VBAT</span>
+    <span class="sv" id="subVbat">--.- <small style="font-size:8px;color:#2a5a7a">V</small></span>
+  </div>
+  <div class="sub-item">
+    <span class="sl">SYS V</span>
+    <span class="sv" id="subSysv">--.- <small style="font-size:8px;color:#2a5a7a">V</small></span>
+  </div>
+  <div class="sub-item">
+    <span class="sl">CURRENT</span>
+    <span class="sv cur" id="subCur">--.- <small style="font-size:8px;color:#2a5a7a">A</small></span>
+  </div>
+  <div class="sub-item">
+    <span class="sl">RUNTIME</span>
+    <span class="sv" id="subTime">--:--:--</span>
+  </div>
+</div>
+
+<div class="demo-note" id="demoNote">▲ DEMO MODE — Bluetooth接続で実車データに切替</div>
+</div><!-- /app -->
+
+<script>
+// ─── Arc / needle helpers ─────────────────────────────────
+const ARC_FULL = 207.3;
+const ARC_HALF = 103.65;
+
+function setArc(id, ratio) {
+  ratio = Math.max(0, Math.min(1, ratio));
+  document.getElementById(id).setAttribute('stroke-dasharray',
+    (ratio * ARC_FULL).toFixed(1) + ' ' + ARC_FULL);
+}
+function setHalfArc(id, ratio) {
+  ratio = Math.max(0, Math.min(1, ratio));
+  document.getElementById(id).setAttribute('stroke-dasharray',
+    (ratio * ARC_HALF).toFixed(1) + ' ' + ARC_HALF);
+}
+function setNeedle(id, ratio, color) {
+  ratio = Math.max(0, Math.min(1, ratio));
+  const angle = -90 + ratio * 180;
+  const el = document.getElementById(id);
+  el.setAttribute('transform', `rotate(${angle.toFixed(1)},84,90)`);
+  if (color) el.setAttribute('stroke', color);
+}
+
+// ─── Tick marks ───────────────────────────────────────────
+function drawTicks(gId, count, r1, r2, cx, cy, color) {
+  const g = document.getElementById(gId);
+  for (let i = 0; i <= count; i++) {
+    const a = (-90 + (i / count) * 180) * Math.PI / 180;
+    const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    ln.setAttribute('x1', (cx + r1 * Math.cos(a)).toFixed(1));
+    ln.setAttribute('y1', (cy + r1 * Math.sin(a)).toFixed(1));
+    ln.setAttribute('x2', (cx + r2 * Math.cos(a)).toFixed(1));
+    ln.setAttribute('y2', (cy + r2 * Math.sin(a)).toFixed(1));
+    ln.setAttribute('stroke', color || '#1e3a5a');
+    ln.setAttribute('stroke-width', '1');
+    g.appendChild(ln);
+  }
+}
+drawTicks('ticksRpm', 8,  60, 66, 84, 90, '#1e3a5a');
+drawTicks('ticksSpd', 8,  60, 66, 84, 90, '#1e3a5a');
+drawTicks('ticksPwr', 8,  60, 66, 84, 90, '#1e3a5a');
+drawTicks('ticksSoc', 10, 60, 66, 84, 90, '#1e3a5a');
+
+// ─── Vehicle data ─────────────────────────────────────────
+const D = { engRot:0, soc:NaN, vbat:0, ibat:0, pbat:0, vsp:0 };
+let systemVolt = 0;
+let runTimeBase = 0;
+let syncTimeMs  = null;   // null = PID 0x1F未受信
+
+function getRtSec() {
+  if (syncTimeMs === null) return null;
+  // sketch式: runTimeBase + (millis() - syncTimeMs) / 1000
+  return runTimeBase + Math.floor((Date.now() - syncTimeMs) / 1000);
+}
+
+// ─── Render ───────────────────────────────────────────────
+function render() {
+  // RPM 0-8000
+  const rpmR = Math.max(0, Math.min(D.engRot, 8000)) / 8000;
+  setArc('arcRpm', rpmR);
+  setNeedle('needleRpm', rpmR);
+  document.getElementById('valRpm').textContent = Math.round(D.engRot);
+
+  // Speed 0-180
+  const spdR = Math.max(0, Math.min(D.vsp, 180)) / 180;
+  setArc('arcSpd', spdR);
+  setNeedle('needleSpd', spdR);
+  document.getElementById('valSpd').textContent = Math.round(D.vsp);
+
+  // Battery PWR bipolar -50..+50 kW
+  const pwrC = Math.max(-50, Math.min(D.pbat, 50));
+  if (pwrC >= 0) {
+    setHalfArc('arcPwrP', pwrC / 50);
+    setHalfArc('arcPwrN', 0);
+    setNeedle('needlePwr', 0.5 + pwrC / 100, '#ffaa00');
+  } else {
+    setHalfArc('arcPwrP', 0);
+    setHalfArc('arcPwrN', -pwrC / 50);
+    setNeedle('needlePwr', 0.5 + pwrC / 100, '#cc44ff');
+  }
+  const pwrEl = document.getElementById('valPwr');
+  pwrEl.textContent = D.pbat.toFixed(1);
+  pwrEl.style.color = D.pbat >= 0 ? '#ffaa00' : '#cc44ff';
+
+  // SOC 0-100
+  const socValid = !isNaN(D.soc);
+  const socR = socValid ? Math.max(0, Math.min(D.soc, 100)) / 100 : 0;
+  setArc('arcSoc', socR);
+  setNeedle('needleSoc', socR);
+  const nc = !socValid ? '#2a5a7a' : D.soc < 20 ? '#ff4444' : D.soc < 50 ? '#ffaa00' : '#00ffcc';
+  document.getElementById('needleSoc').setAttribute('stroke', nc);
+  const socEl = document.getElementById('valSoc');
+  socEl.textContent = socValid ? D.soc.toFixed(1) : '--.-';
+  socEl.style.color = nc;
+
+  // Sub row
+  document.getElementById('subVbat').innerHTML =
+    D.vbat ? D.vbat.toFixed(1) + ' <small style="font-size:8px;color:#2a5a7a">V</small>'
+           : '--.- <small style="font-size:8px;color:#2a5a7a">V</small>';
+  document.getElementById('subSysv').innerHTML =
+    systemVolt ? systemVolt.toFixed(1) + ' <small style="font-size:8px;color:#2a5a7a">V</small>'
+               : '--.- <small style="font-size:8px;color:#2a5a7a">V</small>';
+
+  const curAbs = Math.abs(D.ibat);
+  document.getElementById('subCur').innerHTML =
+    (curAbs >= 100 ? D.ibat.toFixed(0) : D.ibat.toFixed(1)) +
+    ' <small style="font-size:8px;color:#2a5a7a">A</small>';
+
+  // Runtime — sketch formula
+  const rtSec = getRtSec();
+  if (rtSec === null) {
+    document.getElementById('subTime').textContent = '--:--:--';
+  } else {
+    const h = Math.floor(rtSec / 3600);
+    const m = Math.floor((rtSec % 3600) / 60);
+    const s = rtSec % 60;
+    document.getElementById('subTime').textContent =
+      String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  }
+}
+
+// ─── ELM327 レスポンスパーサー ────────────────────────────
+//
+// 【実ログから判明したフォーマット】
+//   ATS0を送っているがこのELM327はスペースなし・8バイト固定長で返す。
+//   1フレーム = 16文字(hex) = 8バイト固定。複数フレームは連結。
+//
+//   シングルフレーム例:
+//     "410D0055555555"  → [41][0D][00][55][55][55][55] + 末尾パッド
+//      └─ SID=0x41, PID=0x0D, data[0]=0x00
+//
+//   マルチフレーム例(PID 9A):
+//     "008 0:419A07004245 1:000D55555555"
+//      └─ ELM327独自フォーマット: "バイト数 0:FF行 1:CF行 ..."
+//         0:行 → First Frame ペイロード (SID PID d0 d1 d2 d3 d4)
+//         1:行 → Consecutive Frame ペイロード (d5 d6 d7 d8 d9 dA dB)
+//
+// 【取得するPIDと変換式】
+//   PID 0x0C  engRot = (A<<8|B) / 4.0        [rpm]
+//   PID 0x0D  vsp    = A                      [km/h]
+//   PID 0x5B  soc    = A * 100.0 / 255.0      [%]
+//   PID 0x1F  runtime= (A<<8|B)               [sec]
+//   PID 0x9A  vbat   = (A<<8|B) / 64.0        [V]   ※マルチフレーム
+//             ibat   = signed16(C<<8|D) * 0.1 [A]
+
+// スペースなし連結hex文字列を16文字(8バイト)ずつ分割してバイト配列リストに変換
+// "410D0055555555410C0000555555" → [[0x41,0x0D,...],[0x41,0x0C,...]]
+function splitFrames(hexStr) {
+  const frames = [];
+  // 16文字 = 8バイト = 1 CAN フレーム
+  for (let i = 0; i + 16 <= hexStr.length; i += 16) {
+    const chunk = hexStr.slice(i, i + 16);
+    const bytes = [];
+    for (let j = 0; j < 16; j += 2)
+      bytes.push(parseInt(chunk.slice(j, j + 2), 16));
+    frames.push(bytes);
+  }
+  // 末尾に16文字に満たない残りがある場合も処理
+  const rem = hexStr.length % 16;
+  if (rem >= 4) {
+    const chunk = hexStr.slice(hexStr.length - rem);
+    const bytes = [];
+    for (let j = 0; j + 1 < chunk.length; j += 2)
+      bytes.push(parseInt(chunk.slice(j, j + 2), 16));
+    frames.push(bytes);
+  }
+  return frames;
+}
+
+// OBD-II Service 01 シングルフレーム応答をデコード
+// bytes[0]=0x41, bytes[1]=PID, bytes[2..]=data (0x55はパッド、無視)
+function decodeService01(bytes) {
+  if (bytes[0] !== 0x41) return;
+  const pid  = bytes[1];
+  const d    = bytes; // d[2], d[3], ... がデータバイト
+  // d[2]以降がデータバイト (スケッチのbuf[3]以降に対応)
+  switch (pid) {
+    case 0x0C: // engRot = (buf[3]<<8|buf[4]) / 4.0
+      D.engRot = ((d[2] << 8) | d[3]) / 4.0; break;
+    case 0x0D: // vsp = buf[3]
+      D.vsp = d[2]; break;
+    case 0x5B: // soc = buf[3] * 100.0 / 255.0
+      D.soc = d[2] * 100.0 / 255.0; break;
+    case 0x05: // tw = buf[3] - 40.0
+      D.tw = d[2] - 40.0; break;
+    case 0x3C: // tcat = (buf[3]<<8|buf[4]) / 10.0 - 40.0
+      D.tcat = ((d[2] << 8) | d[3]) / 10.0 - 40.0; break;
+    case 0x1F: // runtime = buf[3]<<8|buf[4]
+      runTimeBase = (d[2] << 8) | d[3];
+      syncTimeMs  = Date.now(); break;
+  }
+  D.pbat = D.vbat * D.ibat * 0.001;
+}
+
+// PID 9A マルチフレーム処理
+// 実ログで確認された問題:
+//   FFとCFが">"をまたいで別ブロックに届く場合がある
+//   例: ブロックA末尾 "... 0:419A070042BE"
+//       ブロックB先頭 "1:00045555555555 ..."
+// → pendingFF に FF ペイロードを保存し、次のブロックでCFが来たら結合してデコード
+
+let pendingFF = null; // FFペイロードhex文字列を一時保存
+
+function applyMulti9A(ff_hex, cf_hex) {
+  // J1979-DA PID 0x9A: Hybrid/EV Vehicle System Data (6 data bytes A-F)
+  // ELM327レスポンス FF: [SID=0x41][PID=0x9A][A][B][C][D]
+  //                 CF: [E][F][pad...]
+  // Voltage [V] = (256×C + D) / 64
+  // Current [A] = signed16(256×E + F) × 0.1
+
+  const ff = [];
+  for (let i = 0; i + 1 < ff_hex.length; i += 2)
+    ff.push(parseInt(ff_hex.slice(i, i + 2), 16));
+  if (ff[0] !== 0x41 || ff[1] !== 0x9A) { pendingFF = null; return; }
+
+  D.vbat = ((ff[4] << 8) | ff[5]) / 64.0;
+
+  if (cf_hex && cf_hex.length >= 4) {
+    const cf = [];
+    for (let i = 0; i + 1 < cf_hex.length; i += 2)
+      cf.push(parseInt(cf_hex.slice(i, i + 2), 16));
+
+    // E=cf[0], F=cf[1] → signed16
+    const rawEF = (cf[0] << 8) | cf[1];
+    D.ibat = (rawEF >= 0x8000 ? rawEF - 0x10000 : rawEF) * 0.1;
+    D.pbat = D.vbat * D.ibat * 0.001;
+
+    // デバッグ: 生値を全部ログに出す
+    log('[9A] FF=' + ff_hex +
+        ' A=' + ff[2].toString(16).padStart(2,'0') +
+        ' B=' + ff[3].toString(16).padStart(2,'0') +
+        ' C=' + ff[4].toString(16).padStart(2,'0') +
+        ' D=' + ff[5].toString(16).padStart(2,'0'), 'tx');
+    log('[9A] CF=' + cf_hex.slice(0,4) +
+        ' E=' + cf[0].toString(16).padStart(2,'0') +
+        ' F=' + cf[1].toString(16).padStart(2,'0') +
+        ' rawEF=0x' + rawEF.toString(16) +
+        ' ibat=' + D.ibat.toFixed(1) + 'A' +
+        ' vbat=' + D.vbat.toFixed(1) + 'V', 'tx');
+
+    pendingFF = null;
+  } else {
+    log('[9A] FF only, waiting CF... FF=' + ff_hex, 'tx');
+    pendingFF = ff_hex;
+  }
+}
+
+// 1行から N:hex セグメントを全て抽出して返す
+// 戻り値: { segments: {0: hex, 1: hex, ...}, remainderHex: "後続シングル連結hex" }
+function extractSegments(line) {
+  const segments = {};
+  const re = /\b(\d+):([0-9A-Fa-f]+)/g;
+  let m, lastEnd = 0;
+  while ((m = re.exec(line)) !== null) {
+    segments[parseInt(m[1])] = m[2];
+    lastEnd = m.index + m[0].length;
+  }
+  const remainder = line.slice(lastEnd).replace(/\s+/g, '');
+  return { segments, remainder };
+}
+
+// ELM327の1応答ブロック(">"で区切られた単位)をパース
+function parseBlock(block) {
+  const lines = block.split(/\r\n|\r|\n/)
+    .map(l => l.trim())
+    .filter(l => l.length > 0 && l !== '?');
+
+  for (const line of lines) {
+    if (/^(SEARCHING|NO DATA|ERROR|UNABLE|BUS)/i.test(line)) continue;
+    if (/^[A-Za-z]/.test(line) && !/^4[0-9A-Fa-f]/i.test(line)) continue;
+
+    // N:hex パターンを含む行（マルチフレーム関連）
+    if (/\b\d+:[0-9A-Fa-f]/.test(line)) {
+      const { segments, remainder } = extractSegments(line);
+
+      if (segments[0]) {
+        // FF(0:)がある → FFとCF(1:)を処理
+        applyMulti9A(segments[0], segments[1]);
+      } else if (segments[1] && pendingFF) {
+        // CF(1:)のみ、かつFFが保存済み → 結合してデコード
+        applyMulti9A(pendingFF, segments[1]);
+      }
+
+      // N:hexの後に続くシングルフレーム連結部分も処理
+      if (remainder.length >= 14 && /^[0-9A-Fa-f]+$/.test(remainder)) {
+        for (const bytes of splitFrames(remainder)) {
+          if (bytes.length >= 3) decodeService01(bytes);
+        }
+      }
+      continue;
+    }
+
+    // 純粋なシングルフレーム連結行
+    const hex = line.replace(/\s+/g, '');
+    if (!/^[0-9A-Fa-f]+$/.test(hex)) continue;
+    for (const bytes of splitFrames(hex)) {
+      if (bytes.length >= 3) decodeService01(bytes);
+    }
+  }
+}
+
+function onRx(evt) {
+  rxBuf += new TextDecoder().decode(evt.target.value);
+  const parts = rxBuf.split('>');
+  for (let i = 0; i < parts.length - 1; i++) {
+    const block = parts[i];
+    const preview = block.replace(/[\r\n]+/g, ' ').trim();
+    if (preview) log('← ' + preview, 'ok'); // 全文字ログに記録
+    parseBlock(block);
+  }
+  rxBuf = parts[parts.length - 1];
+}
+// ─── Log (全件バッファ保持 + ダウンロード) ───────────────
+const logBuffer = []; // タイムスタンプ付き全ログ
+
+function log(msg, cls) {
+  const now = new Date();
+  const ts = now.toISOString().slice(11, 23); // HH:MM:SS.mmm
+  logBuffer.push({ ts, cls: cls || '', msg });
+
+  const box = document.getElementById('logBox');
+  const s = document.createElement('span');
+  if (cls) s.className = cls;
+  s.textContent = '[' + ts + '] ' + msg;
+  box.appendChild(s);
+  box.appendChild(document.createElement('br'));
+  box.scrollTop = box.scrollHeight;
+  // 画面表示は直近100行のみ（バッファは全件保持）
+  while (box.children.length > 200) {
+    box.removeChild(box.firstChild);
+    box.removeChild(box.firstChild);
+  }
+}
+
+function downloadLog() {
+  if (logBuffer.length === 0) { alert('ログがありません'); return; }
+  const lines = logBuffer.map(e => `[${e.ts}] [${(e.cls||'   ').padEnd(3)}] ${e.msg}`);
+  const text = 'FL4 OBD MONITOR LOG\n' +
+    'Generated: ' + new Date().toISOString() + '\n' +
+    '='.repeat(60) + '\n' +
+    lines.join('\n');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'fl4obd_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.txt';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function clearLog() {
+  logBuffer.length = 0;
+  const box = document.getElementById('logBox');
+  box.innerHTML = '<span style="color:#1a5a3a">▶ ログクリア</span><br>';
+}
+
+// ─── BLE ──────────────────────────────────────────────────
+let bleDevice = null, bleChar = null, connected = false;
+let rxBuf = '', pollTimer = null, demoTimer = null;
+
+// Poll commands (PID / interval ms)
+const CMDS = [
+  { pid: '010C', intv: 90  },   // RPM
+  { pid: '019A', intv: 110 },   // VBAT + IBAT (multi-frame)
+  { pid: '010D', intv: 120 },   // Speed
+  { pid: '015B', intv: 230 },   // SOC
+  { pid: '013C', intv: 500 },   // CAT temp
+  { pid: '0105', intv: 500 },   // Water temp
+  { pid: '011F', intv: 10000 }, // Engine runtime (PID 0x1F, TA_ENG)
+];
+const cmdTs = CMDS.map(() => 0);
+
+async function sendRaw(s) {
+  if (!bleChar) return;
+  log('→ ' + s, 'tx');
+  await bleChar.writeValue(new TextEncoder().encode(s + '\r'));
+}
+
+async function pollLoop() {
+  if (!connected) return;
+  const now = Date.now();
+  for (let i = 0; i < CMDS.length; i++) {
+    if (now - cmdTs[i] >= CMDS[i].intv) {
+      cmdTs[i] = now;
+      try { await sendRaw(CMDS[i].pid); } catch(e) {}
+      await new Promise(r => setTimeout(r, 70));
+    }
+  }
+  pollTimer = setTimeout(pollLoop, 50);
+}
+
+async function initElm() {
+  const seq = [
+    ['ATZ',            1200],
+    ['ATE0',            300],
+    ['ATL0',            300],
+    ['ATS0',            300],
+    ['ATSP0',           500],
+    // CAN header: TA_BATT=0x01, SA=tester(0xF1) → 29bit CAN ID 18DAF101
+    ['ATSH18DAF101',    300],
+    ['ATFCSH18DAF101',  200],
+    ['ATFCSD300000',    200],
+    ['ATFCSM1',         200],
+  ];
+  for (const [c, d] of seq) {
+    try { await sendRaw(c); } catch(e) {}
+    await new Promise(r => setTimeout(r, d));
+  }
+}
+
+// ─── BLE接続 ─────────────────────────────────────────────
+// ELM327 BLEドングルは大きく2種類のサービスUUIDを使う:
+//   Type A: 0000fff0-0000-1000-8000-00805f9b34fb  (FFF0/FFF1/FFF2)
+//   Type B: e7810a71-73ae-499d-8c15-faa9aef0c3f2  (iOS用ドングルに多い)
+// Chromeは optionalServices に短縮UUID(例: 'fff0')を渡すと
+// 「bluetooth.com/specifications/gatt/services」のエラーを出すことがある。
+// → 必ずフル128bit UUIDで指定する。
+// → filters に name/namePrefix を並べ、どれにもマッチしない場合の
+//   フォールバックとして acceptAllDevices:true を使う別ルートを用意する。
+
+const SVC_UUIDS = [
+  '0000fff0-0000-1000-8000-00805f9b34fb',
+  'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+];
+
+async function getBleChar(server) {
+  for (const uuid of SVC_UUIDS) {
+    try {
+      const svc   = await server.getPrimaryService(uuid);
+      const chars = await svc.getCharacteristics();
+      log('サービス検出: ' + uuid.slice(4, 8), 'ok');
+
+      let notifyChar = null, writeChar = null;
+      for (const c of chars) {
+        if (c.properties.notify || c.properties.indicate) notifyChar = c;
+        if (c.properties.write  || c.properties.writeWithoutResponse) writeChar = c;
+      }
+      // 一部ドングルは同一キャラクタリスティックで読み書きする
+      if (!writeChar && notifyChar) writeChar = notifyChar;
+      if (!notifyChar && writeChar) notifyChar = writeChar;
+
+      if (notifyChar) {
+        await notifyChar.startNotifications();
+        notifyChar.addEventListener('characteristicvaluechanged', onRx);
+        log('Notify: ' + notifyChar.uuid.slice(4, 8), 'ok');
+      }
+      return writeChar;
+    } catch(e) {
+      // このサービスUUIDは未対応 → 次を試す
+    }
+  }
+  throw new Error('対応サービスが見つかりません (FFF0/E781)');
+}
+
+async function toggleConnect() {
+  if (connected) { doDisc(); return; }
+
+  if (!navigator.bluetooth) {
+    log('✗ Web Bluetooth 非対応', 'e');
+    log('✗ Android Chrome + HTTPS(またはlocalhost)が必要です', 'e');
+    return;
+  }
+
+  setUI('chk');
+  log('Bluetoothスキャン中...', 'tx');
+
+  try {
+    // フル128bit UUIDで optionalServices を指定
+    // filters: よくある名前のドングルを優先
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [
+        { name: 'OBDII'    },
+        { name: 'ELM327'   },
+        { name: 'OBD2'     },
+        { namePrefix: 'OBD'    },
+        { namePrefix: 'ELM'    },
+        { namePrefix: 'IOS'    },
+        { namePrefix: 'Vlink'  },
+        { namePrefix: 'KONNWEI'},
+        { namePrefix: 'iCar'   },
+        { namePrefix: 'Carista'},
+        { services: ['0000fff0-0000-1000-8000-00805f9b34fb'] },
+        { services: ['e7810a71-73ae-499d-8c15-faa9aef0c3f2'] },
+      ],
+      optionalServices: SVC_UUIDS,
+    });
+
+    bleDevice.addEventListener('gattserverdisconnected', () => {
+      log('切断されました', 'e');
+      doDisc();
+    });
+
+    log('接続中: ' + bleDevice.name, 'ok');
+    const server = await bleDevice.gatt.connect();
+    bleChar = await getBleChar(server);
+    if (!bleChar) throw new Error('書き込みキャラクタリスティック未検出');
+
+    clearInterval(demoTimer); demoTimer = null;
+    document.getElementById('demoNote').style.display = 'none';
+
+    await initElm();
+    connected = true;
+    setUI('on');
+    log('ポーリング開始', 'ok');
+    pollLoop();
+
+  } catch (e) {
+    log('✗ ' + e.message, 'e');
+    setUI('off');
+  }
+}
+
+function doDisc() {
+  clearTimeout(pollTimer);
+  connected = false;
+  if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
+  bleDevice = bleChar = null;
+  setUI('off');
+  startDemo();
+}
+
+function setUI(s) {
+  const dot = document.getElementById('dot');
+  const txt = document.getElementById('sttTxt');
+  const btn = document.getElementById('connBtn');
+  dot.className = 'dot ' + (s === 'on' ? 'on' : s === 'chk' ? 'chk' : '');
+  txt.textContent = s === 'on' ? 'CONNECTED' : s === 'chk' ? 'CONNECTING' : 'DISCONNECTED';
+  txt.style.color  = s === 'on' ? '#00cc66' : s === 'chk' ? '#ffaa00' : '#2a5a7a';
+  btn.textContent  = s === 'on' ? '[ 切断する ]' : '[ BLUETOOTH 接続 ]';
+  btn.disabled     = (s === 'chk');
+}
+
+// ─── DEMO ─────────────────────────────────────────────────
+let dRpm = 800, dSpd = 0, dTw = 25, dTcat = 120, dSoc = 78;
+
+function demoTick() {
+  dRpm  = Math.max(700,  Math.min(6000, dRpm  + (Math.random() - .45) * 350));
+  dSpd  = Math.max(0,    Math.min(160,  dSpd  + (Math.random() - .45) * 12));
+  dTw   = Math.min(95,   dTw   + .2);
+  dTcat = Math.min(800,  dTcat + (Math.random() - .3) * 15);
+  dSoc  = Math.max(20,   Math.min(95, dSoc - Math.random() * 0.04));
+  D.engRot = dRpm;
+  D.vsp    = dSpd;
+  D.soc    = dSoc;
+  D.vbat   = 350 + Math.random() * 10;
+  D.ibat   = (Math.random() - .4) * 120;
+  D.pbat   = D.vbat * D.ibat * 0.001;
+  systemVolt = 12.4 + Math.random() * .4;
+  // デモ用ランタイム: 初回tickでsync
+  if (syncTimeMs === null) { runTimeBase = 0; syncTimeMs = Date.now(); }
+}
+
+function startDemo() {
+  document.getElementById('demoNote').style.display = 'block';
+  demoTimer = setInterval(demoTick, 600);
+}
+
+startDemo();
+setInterval(render, 200);
+</script>
+</body>
+</html>
