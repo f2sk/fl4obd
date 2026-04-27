@@ -214,7 +214,9 @@ body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-he
   </div>
 </div>
 
-<div class="demo-note" id="demoNote">▲ DEMO MODE — Bluetooth接続で実車データに切替</div>
+<div style="display:flex;gap:6px;margin-bottom:0;">
+  <button class="conn-btn" id="demoBtn" onclick="toggleDemo()" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;">[ DEMO ]</button>
+</div>
 </div><!-- /app -->
 
 <script>
@@ -740,8 +742,7 @@ async function toggleConnect() {
     bleChar = await getBleChar(server);
     if (!bleChar) throw new Error('書き込みキャラクタリスティック未検出');
 
-    clearInterval(demoTimer); demoTimer = null;
-    document.getElementById('demoNote').style.display = 'none';
+    stopDemo(); // 接続開始時にデモ停止
 
     await initElm();
     connected = true;
@@ -761,7 +762,6 @@ function doDisc() {
   if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
   bleDevice = bleChar = null;
   setUI('off');
-  startDemo();
 }
 
 function setUI(s) {
@@ -777,6 +777,7 @@ function setUI(s) {
 
 // ─── DEMO ─────────────────────────────────────────────────
 let dRpm = 800, dSpd = 0, dTw = 25, dTcat = 120, dSoc = 78;
+let demoRunning = false;
 
 function demoTick() {
   dRpm  = Math.max(700,  Math.min(6000, dRpm  + (Math.random() - .45) * 350));
@@ -796,11 +797,28 @@ function demoTick() {
 }
 
 function startDemo() {
-  document.getElementById('demoNote').style.display = 'block';
+  if (demoTimer) return;
+  demoRunning = true;
+  document.getElementById('demoBtn').textContent = '[ DEMO 停止 ]';
+  document.getElementById('demoBtn').style.color = '#ffaa00';
+  document.getElementById('demoBtn').style.borderColor = '#ffaa00';
   demoTimer = setInterval(demoTick, 600);
 }
 
-startDemo();
+function stopDemo() {
+  demoRunning = false;
+  clearInterval(demoTimer); demoTimer = null;
+  document.getElementById('demoBtn').textContent = '[ DEMO ]';
+  document.getElementById('demoBtn').style.color = '#2a5a7a';
+  document.getElementById('demoBtn').style.borderColor = '#1a3a5a';
+}
+
+function toggleDemo() {
+  if (connected) return; // 接続中はデモ不可
+  demoRunning ? stopDemo() : startDemo();
+}
+
+// 起動時はデモOFF
 setInterval(render, 200);
 </script>
 </body>
