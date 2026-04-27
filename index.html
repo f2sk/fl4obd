@@ -577,22 +577,34 @@ function clearLog() {
 let bleDevice = null, bleChar = null, connected = false;
 let rxBuf = '', pollTimer = null, demoTimer = null;
 
-// Poll commands (PID / interval ms)
+// Poll commands: TA_BATT(0x01)のみ、TA切替なし
 const CMDS = [
-  { pid: '010C', intv: 90  },   // RPM
-  { pid: '019A', intv: 110 },   // VBAT + IBAT (multi-frame)
-  { pid: '010D', intv: 120 },   // Speed
-  { pid: '015B', intv: 230 },   // SOC
-  { pid: '013C', intv: 500 },   // CAT temp
-  { pid: '0105', intv: 500 },   // Water temp
-  { pid: '011F', intv: 10000 }, // Engine runtime (PID 0x1F, TA_ENG)
+  { ta: 0x01, pid: '010C', intv: 90  },  // RPM
+  { ta: 0x01, pid: '019A', intv: 110 },  // VBAT+IBAT
+  { ta: 0x01, pid: '010D', intv: 120 },  // Speed
+  { ta: 0x01, pid: '015B', intv: 230 },  // SOC
 ];
 const cmdTs = CMDS.map(() => 0);
+let currentTa = 0x01; // 現在設定中のヘッダーTA
 
 async function sendRaw(s) {
   if (!bleChar) return;
   log('→ ' + s, 'tx');
   await bleChar.writeValue(new TextEncoder().encode(s + '\r'));
+}
+
+// TAが変わる場合のみATSHを送ってからPIDを送る
+async function sendPid(cmd) {
+  if (cmd.ta !== currentTa) {
+    const txId = '18DAF1' + cmd.ta.toString(16).padStart(2, '0').toUpperCase();
+    const fcId  = '18DA'  + cmd.ta.toString(16).padStart(2, '0').toUpperCase() + 'F1';
+    await sendRaw('ATSH' + txId);
+    await new Promise(r => setTimeout(r, 50));
+    await sendRaw('ATFCSH' + fcId);
+    await new Promise(r => setTimeout(r, 50));
+    currentTa = cmd.ta;
+  }
+  await sendRaw(cmd.pid);
 }
 
 async function pollLoop() {
@@ -601,7 +613,7 @@ async function pollLoop() {
   for (let i = 0; i < CMDS.length; i++) {
     if (now - cmdTs[i] >= CMDS[i].intv) {
       cmdTs[i] = now;
-      try { await sendRaw(CMDS[i].pid); } catch(e) {}
+      try { await sendPid(CMDS[i]); } catch(e) {}
       await new Promise(r => setTimeout(r, 70));
     }
   }
@@ -615,7 +627,7 @@ async function initElm() {
     ['ATL0',            300],
     ['ATS0',            300],
     ['ATSP0',           500],
-    // CAN header: TA_BATT=0x01, SA=tester(0xF1) → 29bit CAN ID 18DAF101
+    // TA_BATT=0x01 をデフォルトヘッダーとして設定
     ['ATSH18DAF101',    300],
     ['ATFCSH18DAF101',  200],
     ['ATFCSD300000',    200],
@@ -625,6 +637,20 @@ async function initElm() {
     try { await sendRaw(c); } catch(e) {}
     await new Promise(r => setTimeout(r, d));
   }
+
+  // Runtime(PID 0x1F)をTA_ENG(0x10)で1回だけ取得してからTA_BATTに戻す
+  try {
+    await sendRaw('ATSH18DAF110');
+    await new Promise(r => setTimeout(r, 100));
+    await sendRaw('011F');
+    await new Promise(r => setTimeout(r, 300));
+    // TA_BATTに戻す
+    await sendRaw('ATSH18DAF101');
+    await new Promise(r => setTimeout(r, 100));
+    await sendRaw('ATFCSH18DAF101');
+    await new Promise(r => setTimeout(r, 100));
+    currentTa = 0x01;
+  } catch(e) {}
 }
 
 // ─── BLE接続 ─────────────────────────────────────────────
