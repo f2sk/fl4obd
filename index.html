@@ -629,6 +629,7 @@ function onRx(evt) {
     const preview = block.replace(/[\r\n]+/g, ' ').trim();
     if (preview) log('← ' + preview, 'ok');
     parseBlock(block);
+    if (pendingWait && block.includes(pendingWait.str)) pendingWait.resolve(block);
     gotResponse = true;
   }
   rxBuf = parts[parts.length - 1];
@@ -657,6 +658,22 @@ document.addEventListener('visibilitychange', () => {
 let bleDevice = null, bleChar = null, connected = false;
 let rxBuf = '', pollWatchdog = null, demoTimer = null;
 
+// 特定文字列を含むブロック（'>'区切り）が届くまで待つ
+let pendingWait = null;
+function waitForResponse(str, timeout) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingWait = null;
+      reject(new Error('timeout: ' + str));
+    }, timeout);
+    pendingWait = {
+      str,
+      resolve(text) { clearTimeout(timer); pendingWait = null; resolve(text); },
+      reject(e)    { clearTimeout(timer); pendingWait = null; reject(e); }
+    };
+  });
+}
+
 async function sendRaw(s) {
   if (!bleChar) return;
   log('→ ' + s, 'tx');
@@ -679,8 +696,18 @@ function sendNextPid() {
 }
 
 async function initElm() {
+  // ペンディングコマンドをキャンセルしてUARTバッファをクリア
+  try { await sendRaw('\r'); } catch(e) {}
+  await new Promise(r => setTimeout(r, 200));
+  rxBuf = '';
+
+  // ATZ 送信 → "ELM327" を含む応答が来るまで待つ（タイムアウト2秒）
+  // 応答なし = 前回セッションのゴミが残っていて回復不能 → 例外で呼び出し元へ
+  const atzWait = waitForResponse('ELM327', 2000);
+  try { await sendRaw('ATZ'); } catch(e) {}
+  await atzWait;
+
   const seq = [
-    ['ATZ',            1200],
     ['ATE0',            300],
     ['ATL0',            300],
     ['ATS0',            300],
@@ -702,7 +729,6 @@ async function initElm() {
     await new Promise(r => setTimeout(r, 100));
     await sendRaw('011F');
     await new Promise(r => setTimeout(r, 300));
-    // TA_BATTに戻す
     await sendRaw('ATSH18DAF101');
     await new Promise(r => setTimeout(r, 100));
     await sendRaw('ATFCSH18DAF101');
@@ -800,6 +826,7 @@ async function toggleConnect() {
 
     stopDemo(); // 接続開始時にデモ停止
 
+    rxBuf = '';
     await initElm();
     connected = true;
     setUI('on');
