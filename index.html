@@ -78,96 +78,103 @@ body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-he
 ::-webkit-scrollbar-track{background:#040810;}
 ::-webkit-scrollbar-thumb{background:#1a3a5a;border-radius:2px;}
 
+/* 2x2 ANALOG METERS */
+.meters-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;}
+.meter-card{background:#0a1520;border:1px solid #1a2a3a;border-radius:10px;
+  position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;}
+.m-svg{position:absolute;top:0;left:0;width:100%;height:100%;}
+
 /* ── LANDSCAPE MODE: メーターカードだけ90度回転 ─────────── */
 body.landscape .meter-card {
   transform: rotate(90deg);
-  /* カードはほぼ正方形なので回転してもレイアウトが崩れない */
-}
-</style>
+}</style>
 </head>
 <body>
 <div class="app">
 
-<!-- 2x2 ANALOG METERS — 最上部、極力大きく -->
+<!-- 2x2 ANALOG METERS -->
 <div class="meters-grid">
 
   <!-- RPM -->
   <div class="meter-card">
-    <div class="m-lbl">ENGINE RPM</div>
-    <svg class="m-svg" viewBox="0 0 168 100">
+    <svg class="m-svg" viewBox="0 0 200 200" id="svgRpm">
       <defs>
         <linearGradient id="gRpm" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stop-color="#1a5aff"/>
           <stop offset="100%" stop-color="#4a9eff"/>
         </linearGradient>
       </defs>
-      <path d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="#1a2a3a" stroke-width="8" stroke-linecap="round"/>
-      <g id="ticksRpm"></g>
-      <path id="arcRpm" d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="url(#gRpm)" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 207.3"/>
-      <line id="needleRpm" x1="84" y1="90" x2="84" y2="32" stroke="#4a9eff" stroke-width="2" stroke-linecap="round" transform="rotate(0,84,90)" opacity="0.8"/>
-      <circle cx="84" cy="90" r="4" fill="#4a9eff" opacity="0.8"/>
-      <text x="18"  y="98" fill="#1e4a7a" font-size="8" font-family="Courier New" text-anchor="middle">0</text>
-      <text x="150" y="98" fill="#1e4a7a" font-size="8" font-family="Courier New" text-anchor="middle">8k</text>
+      <!-- ラベル -->
+      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">ENGINE RPM</text>
+      <!-- 目盛り弧 (bg) -->
+      <path id="bgRpm" fill="none" stroke="#1a2a3a" stroke-width="10" stroke-linecap="round"/>
+      <!-- 値弧 -->
+      <path id="arcRpm" fill="none" stroke="url(#gRpm)" stroke-width="10" stroke-linecap="round"/>
+      <!-- インジケーターバー (半径方向) -->
+      <line id="barRpm" stroke="#4a9eff" stroke-width="4" stroke-linecap="round"/>
+      <!-- デジタル値 — 円の直径（最下部）付近に大きく -->
+      <text id="valRpm" x="100" y="105" dominant-baseline="middle" text-anchor="middle" fill="#4a9eff" font-size="52" font-weight="bold" font-family="Courier New">0</text>
+      <!-- 単位 -->
+      <text x="100" y="133" text-anchor="middle" fill="#2a5a7a" font-size="11" font-family="Courier New" letter-spacing="1">rpm</text>
+      <!-- スケール -->
+      <text x="22" y="178" text-anchor="middle" fill="#1e3a5a" font-size="10" font-family="Courier New">0</text>
+      <text x="178" y="178" text-anchor="middle" fill="#1e3a5a" font-size="10" font-family="Courier New">8k</text>
     </svg>
-    <div class="m-val rpm" id="valRpm">0</div>
-    <div class="m-unit">rpm</div>
   </div>
 
   <!-- SPEED -->
   <div class="meter-card">
-    <div class="m-lbl">SPEED</div>
-    <svg class="m-svg" viewBox="0 0 168 100">
+    <svg class="m-svg" viewBox="0 0 200 200" id="svgSpd">
       <defs>
         <linearGradient id="gSpd" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stop-color="#00aa55"/>
           <stop offset="100%" stop-color="#00ff88"/>
         </linearGradient>
       </defs>
-      <path d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="#1a2a3a" stroke-width="8" stroke-linecap="round"/>
-      <g id="ticksSpd"></g>
-      <path id="arcSpd" d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="url(#gSpd)" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 207.3"/>
-      <line id="needleSpd" x1="84" y1="90" x2="84" y2="32" stroke="#00ff88" stroke-width="2" stroke-linecap="round" transform="rotate(0,84,90)" opacity="0.8"/>
-      <circle cx="84" cy="90" r="4" fill="#00ff88" opacity="0.8"/>
-      <text x="18"  y="98" fill="#1e4a3a" font-size="8" font-family="Courier New" text-anchor="middle">0</text>
-      <text x="150" y="98" fill="#1e4a3a" font-size="8" font-family="Courier New" text-anchor="middle">180</text>
+      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">SPEED</text>
+      <path id="bgSpd" fill="none" stroke="#1a2a3a" stroke-width="10" stroke-linecap="round"/>
+      <path id="arcSpd" fill="none" stroke="url(#gSpd)" stroke-width="10" stroke-linecap="round"/>
+      <line id="barSpd" stroke="#00ff88" stroke-width="4" stroke-linecap="round"/>
+      <text id="valSpd" x="100" y="105" dominant-baseline="middle" text-anchor="middle" fill="#00ff88" font-size="52" font-weight="bold" font-family="Courier New">0</text>
+      <text x="100" y="133" text-anchor="middle" fill="#2a5a7a" font-size="11" font-family="Courier New" letter-spacing="1">km/h</text>
+      <text x="22" y="178" text-anchor="middle" fill="#1e3a5a" font-size="10" font-family="Courier New">0</text>
+      <text x="178" y="178" text-anchor="middle" fill="#1e3a5a" font-size="10" font-family="Courier New">180</text>
     </svg>
-    <div class="m-val spd" id="valSpd">0</div>
-    <div class="m-unit">km/h</div>
   </div>
 
   <!-- BATTERY PWR -->
   <div class="meter-card">
-    <div class="m-lbl">BATTERY PWR</div>
-    <svg class="m-svg" viewBox="0 0 168 100">
+    <svg class="m-svg" viewBox="0 0 200 200" id="svgPwr">
       <defs>
         <linearGradient id="gPwrP" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stop-color="#886600"/>
           <stop offset="100%" stop-color="#ffaa00"/>
         </linearGradient>
-        <linearGradient id="gPwrN" x1="100%" y1="0%" x2="0%" y2="0%">
-          <stop offset="0%" stop-color="#7722aa"/>
-          <stop offset="100%" stop-color="#cc44ff"/>
+        <linearGradient id="gPwrN" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#cc44ff"/>
+          <stop offset="100%" stop-color="#7722aa"/>
         </linearGradient>
       </defs>
-      <path d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="#1a2a3a" stroke-width="8" stroke-linecap="round"/>
-      <g id="ticksPwr"></g>
-      <path id="arcPwrN" d="M84,24 A66,66 0 0,0 18,90" fill="none" stroke="url(#gPwrN)" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 103.65"/>
-      <path id="arcPwrP" d="M84,24 A66,66 0 0,1 150,90" fill="none" stroke="url(#gPwrP)" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 103.65"/>
-      <line x1="84" y1="24" x2="84" y2="31" stroke="#3a5a7a" stroke-width="1.5"/>
-      <line id="needlePwr" x1="84" y1="90" x2="84" y2="32" stroke="#ffaa00" stroke-width="2" stroke-linecap="round" transform="rotate(0,84,90)" opacity="0.8"/>
-      <circle cx="84" cy="90" r="4" fill="#ffaa00" opacity="0.8"/>
-      <text x="16"  y="98" fill="#3a3a1a" font-size="8" font-family="Courier New" text-anchor="middle">-50</text>
-      <text x="152" y="98" fill="#3a3a1a" font-size="8" font-family="Courier New" text-anchor="middle">+50</text>
-      <text x="84"  y="18" fill="#3a3a1a" font-size="8" font-family="Courier New" text-anchor="middle">0</text>
+      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">BATTERY PWR</text>
+      <path id="bgPwr" fill="none" stroke="#1a2a3a" stroke-width="10" stroke-linecap="round"/>
+      <!-- 負側弧(充電=紫) -->
+      <path id="arcPwrN" fill="none" stroke="url(#gPwrN)" stroke-width="10" stroke-linecap="round"/>
+      <!-- 正側弧(放電=橙) -->
+      <path id="arcPwrP" fill="none" stroke="url(#gPwrP)" stroke-width="10" stroke-linecap="round"/>
+      <!-- 中央マーク -->
+      <line id="centerPwr" stroke="#3a5a7a" stroke-width="2" stroke-linecap="round"/>
+      <line id="barPwr" stroke="#ffaa00" stroke-width="4" stroke-linecap="round"/>
+      <text id="valPwr" x="100" y="105" dominant-baseline="middle" text-anchor="middle" fill="#ffaa00" font-size="48" font-weight="bold" font-family="Courier New">0.0</text>
+      <text x="100" y="133" text-anchor="middle" fill="#2a5a7a" font-size="11" font-family="Courier New" letter-spacing="1">kW</text>
+      <text x="22" y="180" text-anchor="middle" fill="#2a3a1a" font-size="10" font-family="Courier New">-50</text>
+      <text x="100" y="186" text-anchor="middle" fill="#2a3a1a" font-size="10" font-family="Courier New">0</text>
+      <text x="178" y="180" text-anchor="middle" fill="#2a3a1a" font-size="10" font-family="Courier New">+50</text>
     </svg>
-    <div class="m-val pwr" id="valPwr">0.0</div>
-    <div class="m-unit">kW</div>
   </div>
 
   <!-- SOC -->
   <div class="meter-card">
-    <div class="m-lbl">STATE OF CHARGE</div>
-    <svg class="m-svg" viewBox="0 0 168 100">
+    <svg class="m-svg" viewBox="0 0 200 200" id="svgSoc">
       <defs>
         <linearGradient id="gSoc" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%"   stop-color="#cc4400"/>
@@ -175,33 +182,32 @@ body.landscape .meter-card {
           <stop offset="100%" stop-color="#00ffcc"/>
         </linearGradient>
       </defs>
-      <path d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="#1a2a3a" stroke-width="8" stroke-linecap="round"/>
-      <g id="ticksSoc"></g>
-      <path id="arcSoc" d="M18,90 A66,66 0 0,1 150,90" fill="none" stroke="url(#gSoc)" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 207.3"/>
-      <line id="needleSoc" x1="84" y1="90" x2="84" y2="32" stroke="#00ffcc" stroke-width="2" stroke-linecap="round" transform="rotate(0,84,90)" opacity="0.8"/>
-      <circle cx="84" cy="90" r="4" fill="#00ffcc" opacity="0.8"/>
-      <text x="18"  y="98" fill="#2a3a2a" font-size="8" font-family="Courier New" text-anchor="middle">0</text>
-      <text x="150" y="98" fill="#2a3a2a" font-size="8" font-family="Courier New" text-anchor="middle">100</text>
+      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">STATE OF CHARGE</text>
+      <path id="bgSoc" fill="none" stroke="#1a2a3a" stroke-width="10" stroke-linecap="round"/>
+      <path id="arcSoc" fill="none" stroke="url(#gSoc)" stroke-width="10" stroke-linecap="round"/>
+      <line id="barSoc" stroke="#00ffcc" stroke-width="4" stroke-linecap="round"/>
+      <text id="valSoc" x="100" y="105" dominant-baseline="middle" text-anchor="middle" fill="#00ffcc" font-size="52" font-weight="bold" font-family="Courier New">--</text>
+      <text x="100" y="133" text-anchor="middle" fill="#2a5a7a" font-size="11" font-family="Courier New" letter-spacing="1">%</text>
+      <text x="22" y="178" text-anchor="middle" fill="#1e3a2a" font-size="10" font-family="Courier New">0</text>
+      <text x="178" y="178" text-anchor="middle" fill="#1e3a2a" font-size="10" font-family="Courier New">100</text>
     </svg>
-    <div class="m-val soc" id="valSoc">--.-</div>
-    <div class="m-unit">%</div>
   </div>
 
 </div>
 
-<!-- SUB ROW: VBAT / SYS V / CURRENT / RUNTIME -->
+<!-- SUB ROW: VBAT / CURRENT / SYS V / RUNTIME -->
 <div class="sub-row">
   <div class="sub-item">
     <span class="sl">VBAT</span>
     <span class="sv" id="subVbat">--.- <small style="font-size:8px;color:#2a5a7a">V</small></span>
   </div>
   <div class="sub-item">
-    <span class="sl">SYS V</span>
-    <span class="sv" id="subSysv">--.- <small style="font-size:8px;color:#2a5a7a">V</small></span>
-  </div>
-  <div class="sub-item">
     <span class="sl">CURRENT</span>
     <span class="sv cur" id="subCur">--.- <small style="font-size:8px;color:#2a5a7a">A</small></span>
+  </div>
+  <div class="sub-item">
+    <span class="sl">SYS V</span>
+    <span class="sv" id="subSysv">--.- <small style="font-size:8px;color:#2a5a7a">V</small></span>
   </div>
   <div class="sub-item">
     <span class="sl">RUNTIME</span>
@@ -277,57 +283,97 @@ function clearLog() {
   box.innerHTML = '<span style="color:#1a5a3a">▶ ログクリア</span><br>';
 }
 
-// ─── Arc / needle helpers ─────────────────────────────────
-const ARC_FULL = 207.3;
-const ARC_HALF = 103.65;
+// ─── SVGメーター描画ヘルパー ──────────────────────────────
+// 中心(cx,cy)、半径r、開始角deg_start〜終了角deg_end の弧パスを返す
+// 角度は12時=0、時計回り正
+const CX = 100, CY = 105, R = 72;
+const DEG_START = -140, DEG_END = 140; // 280°弧
 
+function deg2rad(d) { return d * Math.PI / 180; }
+
+function arcPoint(deg) {
+  const r = deg2rad(deg - 90); // SVGはY下向きなので-90補正
+  return { x: CX + R * Math.cos(r), y: CY + R * Math.sin(r) };
+}
+
+function arcPath(deg1, deg2) {
+  const p1 = arcPoint(deg1), p2 = arcPoint(deg2);
+  const span = deg2 - deg1;
+  const large = span > 180 ? 1 : 0;
+  return `M${p1.x.toFixed(2)},${p1.y.toFixed(2)} A${R},${R} 0 ${large},1 ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+}
+
+// 弧の総長さ (280° / 360° × 2πR)
+const ARC_LEN = (280 / 360) * 2 * Math.PI * R;
+const ARC_HALF = ARC_LEN / 2;
+
+// 背景弧を初期化
+function initBgArc(id) {
+  const el = document.getElementById(id);
+  el.setAttribute('d', arcPath(DEG_START, DEG_END));
+}
+['bgRpm','bgSpd','bgPwr','bgSoc'].forEach(initBgArc);
+
+// 値弧: ratio 0〜1 で左端から右端へ
 function setArc(id, ratio) {
   ratio = Math.max(0, Math.min(1, ratio));
-  document.getElementById(id).setAttribute('stroke-dasharray',
-    (ratio * ARC_FULL).toFixed(1) + ' ' + ARC_FULL);
-}
-function setHalfArc(id, ratio) {
-  ratio = Math.max(0, Math.min(1, ratio));
-  document.getElementById(id).setAttribute('stroke-dasharray',
-    (ratio * ARC_HALF).toFixed(1) + ' ' + ARC_HALF);
-}
-function setNeedle(id, ratio, color) {
-  ratio = Math.max(0, Math.min(1, ratio));
-  const angle = -90 + ratio * 180;
+  const deg = DEG_START + ratio * 280;
   const el = document.getElementById(id);
-  el.setAttribute('transform', `rotate(${angle.toFixed(1)},84,90)`);
+  if (ratio === 0) { el.setAttribute('d', `M${arcPoint(DEG_START).x},${arcPoint(DEG_START).y}`); return; }
+  el.setAttribute('d', arcPath(DEG_START, deg));
+}
+
+// 双極値弧: ratio -1〜+1、中央(deg=0°相当)から左右に伸びる
+function setBiArc(idP, idN, idBar, idVal, ratio, colP, colN) {
+  ratio = Math.max(-1, Math.min(1, ratio));
+  const center = DEG_START + 140; // 280°の中央 = DEG_START+140
+  const deg = center + ratio * 140;
+  const pP = document.getElementById(idP);
+  const pN = document.getElementById(idN);
+  if (ratio >= 0) {
+    pP.setAttribute('d', ratio > 0 ? arcPath(center, deg) : `M${arcPoint(center).x},${arcPoint(center).y}`);
+    pN.setAttribute('d', `M${arcPoint(center).x},${arcPoint(center).y}`);
+    setBar(idBar, deg, colP);
+    document.getElementById(idVal).setAttribute('fill', colP);
+  } else {
+    pN.setAttribute('d', arcPath(deg, center));
+    pP.setAttribute('d', `M${arcPoint(center).x},${arcPoint(center).y}`);
+    setBar(idBar, deg, colN);
+    document.getElementById(idVal).setAttribute('fill', colN);
+  }
+}
+
+// インジケーターバー: 弧上の点から中心方向に短いバー（半径方向）
+function setBar(id, deg, color) {
+  const r = deg2rad(deg - 90);
+  const cos = Math.cos(r), sin = Math.sin(r);
+  const x1 = CX + (R - 10) * cos, y1 = CY + (R - 10) * sin;
+  const x2 = CX + (R + 10) * cos, y2 = CY + (R + 10) * sin;
+  const el = document.getElementById(id);
+  el.setAttribute('x1', x1.toFixed(2)); el.setAttribute('y1', y1.toFixed(2));
+  el.setAttribute('x2', x2.toFixed(2)); el.setAttribute('y2', y2.toFixed(2));
   if (color) el.setAttribute('stroke', color);
 }
 
-// ─── Tick marks ───────────────────────────────────────────
-function drawTicks(gId, count, r1, r2, cx, cy, color) {
-  const g = document.getElementById(gId);
-  for (let i = 0; i <= count; i++) {
-    const a = (-90 + (i / count) * 180) * Math.PI / 180;
-    const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    ln.setAttribute('x1', (cx + r1 * Math.cos(a)).toFixed(1));
-    ln.setAttribute('y1', (cy + r1 * Math.sin(a)).toFixed(1));
-    ln.setAttribute('x2', (cx + r2 * Math.cos(a)).toFixed(1));
-    ln.setAttribute('y2', (cy + r2 * Math.sin(a)).toFixed(1));
-    ln.setAttribute('stroke', color || '#1e3a5a');
-    ln.setAttribute('stroke-width', '1');
-    g.appendChild(ln);
-  }
+// 中央マーク初期化 (PWR用)
+function initCenterMark() {
+  const center = DEG_START + 140;
+  const r = deg2rad(center - 90);
+  const cos = Math.cos(r), sin = Math.sin(r);
+  const el = document.getElementById('centerPwr');
+  el.setAttribute('x1', (CX + (R-8)*cos).toFixed(2));  el.setAttribute('y1', (CY + (R-8)*sin).toFixed(2));
+  el.setAttribute('x2', (CX + (R+8)*cos).toFixed(2));  el.setAttribute('y2', (CY + (R+8)*sin).toFixed(2));
 }
-drawTicks('ticksRpm', 8,  60, 66, 84, 90, '#1e3a5a');
-drawTicks('ticksSpd', 8,  60, 66, 84, 90, '#1e3a5a');
-drawTicks('ticksPwr', 8,  60, 66, 84, 90, '#1e3a5a');
-drawTicks('ticksSoc', 10, 60, 66, 84, 90, '#1e3a5a');
+initCenterMark();
 
 // ─── Vehicle data ─────────────────────────────────────────
 const D = { engRot:0, soc:NaN, vbat:0, ibat:0, pbat:0, vsp:0 };
 let systemVolt = 0;
 let runTimeBase = 0;
-let syncTimeMs  = null;   // null = PID 0x1F未受信
+let syncTimeMs  = null;
 
 function getRtSec() {
   if (syncTimeMs === null) return null;
-  // sketch式: runTimeBase + (millis() - syncTimeMs) / 1000
   return runTimeBase + Math.floor((Date.now() - syncTimeMs) / 1000);
 }
 
@@ -336,40 +382,30 @@ function render() {
   // RPM 0-8000
   const rpmR = Math.max(0, Math.min(D.engRot, 8000)) / 8000;
   setArc('arcRpm', rpmR);
-  setNeedle('needleRpm', rpmR);
+  setBar('barRpm', DEG_START + rpmR * 280, '#4a9eff');
   document.getElementById('valRpm').textContent = Math.round(D.engRot);
 
   // Speed 0-180
   const spdR = Math.max(0, Math.min(D.vsp, 180)) / 180;
   setArc('arcSpd', spdR);
-  setNeedle('needleSpd', spdR);
+  setBar('barSpd', DEG_START + spdR * 280, '#00ff88');
   document.getElementById('valSpd').textContent = Math.round(D.vsp);
 
   // Battery PWR bipolar -50..+50 kW
-  const pwrC = Math.max(-50, Math.min(D.pbat, 50));
-  if (pwrC >= 0) {
-    setHalfArc('arcPwrP', pwrC / 50);
-    setHalfArc('arcPwrN', 0);
-    setNeedle('needlePwr', 0.5 + pwrC / 100, '#ffaa00');
-  } else {
-    setHalfArc('arcPwrP', 0);
-    setHalfArc('arcPwrN', -pwrC / 50);
-    setNeedle('needlePwr', 0.5 + pwrC / 100, '#cc44ff');
-  }
-  const pwrEl = document.getElementById('valPwr');
-  pwrEl.textContent = D.pbat.toFixed(1);
-  pwrEl.style.color = D.pbat >= 0 ? '#ffaa00' : '#cc44ff';
+  const pwrR = Math.max(-1, Math.min(D.pbat / 50, 1));
+  setBiArc('arcPwrP', 'arcPwrN', 'barPwr', 'valPwr', pwrR, '#ffaa00', '#cc44ff');
+  document.getElementById('valPwr').textContent = D.pbat.toFixed(1);
 
   // SOC 0-100
   const socValid = !isNaN(D.soc);
   const socR = socValid ? Math.max(0, Math.min(D.soc, 100)) / 100 : 0;
-  setArc('arcSoc', socR);
-  setNeedle('needleSoc', socR);
   const nc = !socValid ? '#2a5a7a' : D.soc < 20 ? '#ff4444' : D.soc < 50 ? '#ffaa00' : '#00ffcc';
-  document.getElementById('needleSoc').setAttribute('stroke', nc);
+  setArc('arcSoc', socR);
+  setBar('barSoc', DEG_START + socR * 280, nc);
+  document.getElementById('barSoc').setAttribute('stroke', nc);
   const socEl = document.getElementById('valSoc');
-  socEl.textContent = socValid ? D.soc.toFixed(1) : '--.-';
-  socEl.style.color = nc;
+  socEl.textContent = socValid ? D.soc.toFixed(1) : '--';
+  socEl.setAttribute('fill', nc);
 
   // Sub row
   document.getElementById('subVbat').innerHTML =
@@ -378,13 +414,12 @@ function render() {
   document.getElementById('subSysv').innerHTML =
     systemVolt ? systemVolt.toFixed(1) + ' <small style="font-size:8px;color:#2a5a7a">V</small>'
                : '--.- <small style="font-size:8px;color:#2a5a7a">V</small>';
-
   const curAbs = Math.abs(D.ibat);
   document.getElementById('subCur').innerHTML =
     (curAbs >= 100 ? D.ibat.toFixed(0) : D.ibat.toFixed(1)) +
     ' <small style="font-size:8px;color:#2a5a7a">A</small>';
 
-  // Runtime — sketch formula
+  // Runtime
   const rtSec = getRtSec();
   if (rtSec === null) {
     document.getElementById('subTime').textContent = '--:--:--';
@@ -393,7 +428,7 @@ function render() {
     const m = Math.floor((rtSec % 3600) / 60);
     const s = rtSec % 60;
     document.getElementById('subTime').textContent =
-      String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+      String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
   }
 }
 
@@ -466,6 +501,8 @@ function decodeService01(bytes) {
     case 0x1F: // runtime = buf[3]<<8|buf[4]
       runTimeBase = (d[2] << 8) | d[3];
       syncTimeMs  = Date.now(); break;
+    case 0x42: // Control Module Voltage = (A*256+B)/1000 [V]
+      systemVolt = ((d[2] << 8) | d[3]) / 1000.0; break;
   }
   D.pbat = D.vbat * D.ibat * 0.001;
 }
@@ -606,6 +643,7 @@ const CMDS = [
   { pid: '019A', intv: 110 },  // VBAT+IBAT
   { pid: '010D', intv: 120 },  // Speed
   { pid: '015B', intv: 230 },  // SOC
+  { pid: '0142', intv: 500 },  // SYS V (Control Module Voltage) = (A*256+B)/1000 [V]
 ];
 let cmdIdx = 0;
 let cmdLastTs = CMDS.map(() => 0);
