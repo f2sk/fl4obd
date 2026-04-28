@@ -41,7 +41,8 @@ body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-he
   border-radius:4px;color:#3a7aaa;font-family:'Courier New',monospace;
   font-size:9px;letter-spacing:1px;cursor:pointer;transition:all .15s;z-index:1;}
 .log-btn:hover{border-color:#4a9eff;color:#4a9eff;}
-.log-clr{right:54px;}
+.log-btn.rec{border-color:#cc3333;color:#cc3333;animation:blink 1s infinite;}
+.log-btn.rec:hover{border-color:#ff4444;color:#ff4444;}
 
 /* CONNECT */
 .conn-btn{width:100%;padding:10px;background:#0d1e30;border:1px solid #2a5a8c;
@@ -231,8 +232,7 @@ body.landscape .meter-card {
   <div class="log" id="logBox">
     <span style="color:#1a5a3a">▶ Web Bluetooth 準備完了 — Chrome + HTTPS必須</span><br>
   </div>
-  <button class="log-btn log-clr" onclick="clearLog()">CLR</button>
-  <button class="log-btn" onclick="downloadLog()">LOG↓</button>
+  <button class="log-btn" id="recBtn" onclick="toggleRec()">● REC</button>
 </div>
 
 <div style="display:flex;gap:6px;margin-bottom:0;">
@@ -241,14 +241,14 @@ body.landscape .meter-card {
 </div><!-- /app -->
 
 <script>
-// ─── Log (全件バッファ保持 + ダウンロード) ───────────────
-// ※ onRx より前に定義する必要がある
-const logBuffer = [];
+// ─── Log ─────────────────────────────────────────────────
+let logBuffer = [];
+let logRecording = false;
 
 function log(msg, cls) {
   const now = new Date();
   const ts = now.toISOString().slice(11, 23);
-  logBuffer.push({ ts, cls: cls || '', msg });
+  if (logRecording) logBuffer.push({ ts, cls: cls || '', msg });
   const box = document.getElementById('logBox');
   const s = document.createElement('span');
   if (cls) s.className = cls;
@@ -262,25 +262,31 @@ function log(msg, cls) {
   }
 }
 
-function downloadLog() {
-  if (logBuffer.length === 0) { alert('ログがありません'); return; }
-  const lines = logBuffer.map(e => `[${e.ts}] [${(e.cls||'   ').padEnd(3)}] ${e.msg}`);
-  const text = 'FL4 OBD MONITOR LOG\n' +
-    'Generated: ' + new Date().toISOString() + '\n' +
-    '='.repeat(60) + '\n' + lines.join('\n');
-  const blob = new Blob([text], { type: 'text/plain' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url;
-  a.download = 'fl4obd_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.txt';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function clearLog() {
-  logBuffer.length = 0;
-  const box = document.getElementById('logBox');
-  box.innerHTML = '<span style="color:#1a5a3a">▶ ログクリア</span><br>';
+function toggleRec() {
+  const btn = document.getElementById('recBtn');
+  if (!logRecording) {
+    logBuffer = [];
+    logRecording = true;
+    btn.textContent = '■ STOP';
+    btn.classList.add('rec');
+    log('--- REC START ---', 'ok');
+  } else {
+    logRecording = false;
+    btn.textContent = '● REC';
+    btn.classList.remove('rec');
+    if (logBuffer.length === 0) return;
+    const lines = logBuffer.map(e => `[${e.ts}] [${(e.cls||'   ').padEnd(3)}] ${e.msg}`);
+    const text = 'FL4 OBD MONITOR LOG\n' +
+      'Generated: ' + new Date().toISOString() + '\n' +
+      '='.repeat(60) + '\n' + lines.join('\n');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = 'fl4obd_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 }
 
 // ─── SVGメーター描画ヘルパー ──────────────────────────────
