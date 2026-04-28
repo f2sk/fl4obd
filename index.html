@@ -78,32 +78,11 @@ body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-he
 ::-webkit-scrollbar-track{background:#040810;}
 ::-webkit-scrollbar-thumb{background:#1a3a5a;border-radius:2px;}
 
-/* ── LANDSCAPE MODE ─────────────────────────────────────── */
-body.landscape {
-  overflow: hidden;
+/* ── LANDSCAPE MODE: メーターカードだけ90度回転 ─────────── */
+body.landscape .meter-card {
+  transform: rotate(90deg);
+  /* カードはほぼ正方形なので回転してもレイアウトが崩れない */
 }
-body.landscape .app {
-  max-width: 100vw;
-  width: 100vw;
-  height: 100vh;
-  padding: 6px 10px;
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
-  overflow: hidden;
-}
-body.landscape .hdr { padding: 4px 0 6px; margin-bottom:6px; }
-body.landscape .conn-btn { padding: 6px; margin-bottom: 6px; font-size:10px; }
-body.landscape .log-wrap { display: none; } /* 横向き時はログ非表示 */
-body.landscape .meters-grid {
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-  margin-bottom: 6px;
-}
-body.landscape .m-svg { width: 100%; height: auto; max-height: 80px; }
-body.landscape .m-val { font-size: 20px; }
-body.landscape .sub-row { padding: 5px 10px; margin-bottom: 4px; }
-body.landscape .sub-item .sv { font-size: 12px; }
-body.landscape #demoBtn { display: none; }
 </style>
 </head>
 <body>
@@ -255,6 +234,48 @@ body.landscape #demoBtn { display: none; }
 </div><!-- /app -->
 
 <script>
+// ─── Log (全件バッファ保持 + ダウンロード) ───────────────
+// ※ onRx より前に定義する必要がある
+const logBuffer = [];
+
+function log(msg, cls) {
+  const now = new Date();
+  const ts = now.toISOString().slice(11, 23);
+  logBuffer.push({ ts, cls: cls || '', msg });
+  const box = document.getElementById('logBox');
+  const s = document.createElement('span');
+  if (cls) s.className = cls;
+  s.textContent = '[' + ts + '] ' + msg;
+  box.appendChild(s);
+  box.appendChild(document.createElement('br'));
+  box.scrollTop = box.scrollHeight;
+  while (box.children.length > 200) {
+    box.removeChild(box.firstChild);
+    box.removeChild(box.firstChild);
+  }
+}
+
+function downloadLog() {
+  if (logBuffer.length === 0) { alert('ログがありません'); return; }
+  const lines = logBuffer.map(e => `[${e.ts}] [${(e.cls||'   ').padEnd(3)}] ${e.msg}`);
+  const text = 'FL4 OBD MONITOR LOG\n' +
+    'Generated: ' + new Date().toISOString() + '\n' +
+    '='.repeat(60) + '\n' + lines.join('\n');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = 'fl4obd_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.txt';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function clearLog() {
+  logBuffer.length = 0;
+  const box = document.getElementById('logBox');
+  box.innerHTML = '<span style="color:#1a5a3a">▶ ログクリア</span><br>';
+}
+
 // ─── Arc / needle helpers ─────────────────────────────────
 const ARC_FULL = 207.3;
 const ARC_HALF = 103.65;
@@ -566,63 +587,9 @@ function onRx(evt) {
   }
   rxBuf = parts[parts.length - 1];
 }
-// ─── Log (全件バッファ保持 + ダウンロード) ───────────────
-const logBuffer = []; // タイムスタンプ付き全ログ
-
-function log(msg, cls) {
-  const now = new Date();
-  const ts = now.toISOString().slice(11, 23); // HH:MM:SS.mmm
-  logBuffer.push({ ts, cls: cls || '', msg });
-
-  const box = document.getElementById('logBox');
-  const s = document.createElement('span');
-  if (cls) s.className = cls;
-  s.textContent = '[' + ts + '] ' + msg;
-  box.appendChild(s);
-  box.appendChild(document.createElement('br'));
-  box.scrollTop = box.scrollHeight;
-  // 画面表示は直近100行のみ（バッファは全件保持）
-  while (box.children.length > 200) {
-    box.removeChild(box.firstChild);
-    box.removeChild(box.firstChild);
-  }
-}
-
-function downloadLog() {
-  if (logBuffer.length === 0) { alert('ログがありません'); return; }
-  const lines = logBuffer.map(e => `[${e.ts}] [${(e.cls||'   ').padEnd(3)}] ${e.msg}`);
-  const text = 'FL4 OBD MONITOR LOG\n' +
-    'Generated: ' + new Date().toISOString() + '\n' +
-    '='.repeat(60) + '\n' +
-    lines.join('\n');
-  const blob = new Blob([text], { type: 'text/plain' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = 'fl4obd_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.txt';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function clearLog() {
-  logBuffer.length = 0;
-  const box = document.getElementById('logBox');
-  box.innerHTML = '<span style="color:#1a5a3a">▶ ログクリア</span><br>';
-}
-
 // ─── BLE ──────────────────────────────────────────────────
 let bleDevice = null, bleChar = null, connected = false;
 let rxBuf = '', pollTimer = null, demoTimer = null;
-
-// Poll commands: TA_BATT(0x01)のみ、TA切替なし
-const CMDS = [
-  { ta: 0x01, pid: '010C', intv: 90  },  // RPM
-  { ta: 0x01, pid: '019A', intv: 110 },  // VBAT+IBAT
-  { ta: 0x01, pid: '010D', intv: 120 },  // Speed
-  { ta: 0x01, pid: '015B', intv: 230 },  // SOC
-];
-const cmdTs = CMDS.map(() => 0);
-let currentTa = 0x01; // 現在設定中のヘッダーTA
 
 async function sendRaw(s) {
   if (!bleChar) return;
@@ -630,31 +597,37 @@ async function sendRaw(s) {
   await bleChar.writeValue(new TextEncoder().encode(s + '\r'));
 }
 
-// TAが変わる場合のみATSHを送ってからPIDを送る
-async function sendPid(cmd) {
-  if (cmd.ta !== currentTa) {
-    const txId = '18DAF1' + cmd.ta.toString(16).padStart(2, '0').toUpperCase();
-    const fcId  = '18DA'  + cmd.ta.toString(16).padStart(2, '0').toUpperCase() + 'F1';
-    await sendRaw('ATSH' + txId);
-    await new Promise(r => setTimeout(r, 50));
-    await sendRaw('ATFCSH' + fcId);
-    await new Promise(r => setTimeout(r, 50));
-    currentTa = cmd.ta;
-  }
-  await sendRaw(cmd.pid);
-}
+// ─── ポーリング ───────────────────────────────────────────
+// 1サイクルで1PIDずつ順番に送る。ELM327の応答待ちを確実にするため
+// タイマーベースではなく1PID送信→待機→次PIDの逐次方式にする。
+const CMDS = [
+  { pid: '010C', intv: 90  },  // RPM
+  { pid: '019A', intv: 110 },  // VBAT+IBAT
+  { pid: '010D', intv: 120 },  // Speed
+  { pid: '015B', intv: 230 },  // SOC
+];
+let cmdIdx = 0;
+let cmdLastTs = CMDS.map(() => 0);
 
 async function pollLoop() {
   if (!connected) return;
+
   const now = Date.now();
+  // 送信間隔が来ているPIDを1つ選んで送信
+  let sent = false;
   for (let i = 0; i < CMDS.length; i++) {
-    if (now - cmdTs[i] >= CMDS[i].intv) {
-      cmdTs[i] = now;
-      try { await sendPid(CMDS[i]); } catch(e) {}
-      await new Promise(r => setTimeout(r, 70));
+    const idx = (cmdIdx + i) % CMDS.length;
+    if (now - cmdLastTs[idx] >= CMDS[idx].intv) {
+      cmdLastTs[idx] = now;
+      cmdIdx = (idx + 1) % CMDS.length;
+      try { await sendRaw(CMDS[idx].pid); } catch(e) { log('✗ send err: '+e.message,'e'); }
+      sent = true;
+      break;
     }
   }
-  pollTimer = setTimeout(pollLoop, 50);
+
+  // 次のポーリングまでの待機: 送信した場合は応答待ち込みで100ms、なければ20ms
+  pollTimer = setTimeout(pollLoop, sent ? 100 : 20);
 }
 
 async function initElm() {
