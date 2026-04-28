@@ -634,6 +634,25 @@ function onRx(evt) {
   rxBuf = parts[parts.length - 1];
   if (gotResponse && connected) sendNextPid();
 }
+// ─── Screen Wake Lock ────────────────────────────────────
+let wakeLock = null;
+
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+  } catch(e) {}
+}
+
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+
+// ページが再表示されたとき（通知バーを開けて戻るなど）に再取得
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && connected) requestWakeLock();
+});
+
 // ─── BLE ──────────────────────────────────────────────────
 let bleDevice = null, bleChar = null, connected = false;
 let rxBuf = '', pollWatchdog = null, demoTimer = null;
@@ -785,6 +804,7 @@ async function toggleConnect() {
     connected = true;
     setUI('on');
     log('ポーリング開始', 'ok');
+    requestWakeLock();
     sendNextPid();
 
   } catch (e) {
@@ -795,6 +815,7 @@ async function toggleConnect() {
 
 function doDisc() {
   clearTimeout(pollWatchdog);
+  releaseWakeLock();
   connected = false;
   if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
   bleDevice = bleChar = null;
