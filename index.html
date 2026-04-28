@@ -617,17 +617,20 @@ function parseBlock(block) {
 function onRx(evt) {
   rxBuf += new TextDecoder().decode(evt.target.value);
   const parts = rxBuf.split('>');
+  let gotResponse = false;
   for (let i = 0; i < parts.length - 1; i++) {
     const block = parts[i];
     const preview = block.replace(/[\r\n]+/g, ' ').trim();
-    if (preview) log('← ' + preview, 'ok'); // 全文字ログに記録
+    if (preview) log('← ' + preview, 'ok');
     parseBlock(block);
+    gotResponse = true;
   }
   rxBuf = parts[parts.length - 1];
+  if (gotResponse && connected) sendNextPid();
 }
 // ─── BLE ──────────────────────────────────────────────────
 let bleDevice = null, bleChar = null, connected = false;
-let rxBuf = '', pollTimer = null, demoTimer = null;
+let rxBuf = '', pollWatchdog = null, demoTimer = null;
 
 async function sendRaw(s) {
   if (!bleChar) return;
@@ -636,37 +639,18 @@ async function sendRaw(s) {
 }
 
 // ─── ポーリング ───────────────────────────────────────────
-// 1サイクルで1PIDずつ順番に送る。ELM327の応答待ちを確実にするため
-// タイマーベースではなく1PID送信→待機→次PIDの逐次方式にする。
-const CMDS = [
-  { pid: '010C', intv: 90  },  // RPM
-  { pid: '019A', intv: 110 },  // VBAT+IBAT
-  { pid: '010D', intv: 120 },  // Speed
-  { pid: '015B', intv: 230 },  // SOC
-  { pid: '0142', intv: 500 },  // SYS V (Control Module Voltage) = (A*256+B)/1000 [V]
-];
+// レスポンス駆動: onRx で '>' 受信 → 即次PID送信
+// ウォッチドッグ(200ms)は無応答(NO DATA等)時のフォールバック
+const CMDS = ['010C', '019A', '010D', '015B'];
 let cmdIdx = 0;
-let cmdLastTs = CMDS.map(() => 0);
 
-async function pollLoop() {
+function sendNextPid() {
   if (!connected) return;
-
-  const now = Date.now();
-  // 送信間隔が来ているPIDを1つ選んで送信
-  let sent = false;
-  for (let i = 0; i < CMDS.length; i++) {
-    const idx = (cmdIdx + i) % CMDS.length;
-    if (now - cmdLastTs[idx] >= CMDS[idx].intv) {
-      cmdLastTs[idx] = now;
-      cmdIdx = (idx + 1) % CMDS.length;
-      try { await sendRaw(CMDS[idx].pid); } catch(e) { log('✗ send err: '+e.message,'e'); }
-      sent = true;
-      break;
-    }
-  }
-
-  // 次のポーリングまでの待機: 送信した場合は応答待ち込みで100ms、なければ20ms
-  pollTimer = setTimeout(pollLoop, sent ? 100 : 20);
+  clearTimeout(pollWatchdog);
+  const pid = CMDS[cmdIdx];
+  cmdIdx = (cmdIdx + 1) % CMDS.length;
+  try { sendRaw(pid); } catch(e) { log('✗ send err: ' + e.message, 'e'); }
+  pollWatchdog = setTimeout(sendNextPid, 200);
 }
 
 async function initElm() {
@@ -795,7 +779,7 @@ async function toggleConnect() {
     connected = true;
     setUI('on');
     log('ポーリング開始', 'ok');
-    pollLoop();
+    sendNextPid();
 
   } catch (e) {
     log('✗ ' + e.message, 'e');
@@ -804,7 +788,7 @@ async function toggleConnect() {
 }
 
 function doDisc() {
-  clearTimeout(pollTimer);
+  clearTimeout(pollWatchdog);
   connected = false;
   if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
   bleDevice = bleChar = null;
