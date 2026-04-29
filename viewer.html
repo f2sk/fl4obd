@@ -285,7 +285,7 @@ function baseCfg() {
   };
 }
 
-function makeToggles(containerId, chartKey, defs) {
+function makeToggles(containerId, chartKey, defs, onToggle) {
   const el = document.getElementById(containerId);
   el.innerHTML = '';
   defs.forEach(({ label, color }, i) => {
@@ -298,10 +298,22 @@ function makeToggles(containerId, chartKey, defs) {
       const ds = ch.data.datasets[i];
       ds.hidden = !ds.hidden;
       btn.classList.toggle('off', !!ds.hidden);
+      if (onToggle) onToggle(ch);
       ch.update();
     });
     el.appendChild(btn);
   });
+}
+
+/* 表示中の系列からラベル名(括弧内)を収集して軸タイトルを更新 */
+function syncBattAxesLabels(chart) {
+  for (const axisId of ['y', 'y2']) {
+    const units = chart.data.datasets
+      .filter(d => d.yAxisID === axisId && !d.hidden)
+      .map(d => d.label.match(/\((.+)\)$/)?.[1] ?? '')
+      .filter(Boolean);
+    chart.options.scales[axisId].title.text = units.join(' / ');
+  }
 }
 
 function destroyAll() {
@@ -378,12 +390,14 @@ function render(ds, filename) {
       type: 'linear', position: 'left',
       grid:  { color: '#1a3050' },
       ticks: { color: '#607090', font: { size: 10 } },
+      title: { display: true, text: '', color: '#607090', font: { size: 10 } },
       afterFit: s => { s.width = Y_WIDTH; },
     };
     cfg.options.scales.y2 = {
       type: 'linear', position: 'right',
       grid:  { color: 'transparent' },
       ticks: { color: '#607090', font: { size: 10 } },
+      title: { display: true, text: '', color: '#607090', font: { size: 10 } },
       afterFit: s => { s.width = Y_WIDTH; },
     };
     /* ツールチップに単位を付ける */
@@ -398,7 +412,8 @@ function render(ds, filename) {
       }
     };
     charts.battery = new Chart(document.getElementById('cBattery'), cfg);
-    makeToggles('togBattery', 'battery', battDefs.map(d => ({ label: d.label, color: d.color })));
+    syncBattAxesLabels(charts.battery);
+    makeToggles('togBattery', 'battery', battDefs.map(d => ({ label: d.label, color: d.color })), syncBattAxesLabels);
   }
 
   /* --- SysV (独立ウィンドウ、データがある場合のみ表示) --- */
