@@ -247,12 +247,15 @@ const C = {
   soc:   '#00ccff', sysv: '#cc88ff'
 };
 
+const Y_WIDTH = 55; // 全チャートで左右軸幅を統一してX軸を揃える
+
 function scaleOpt(label, color, pos = 'left', min, max) {
   return {
     type: 'linear', position: pos,
     grid:  { color: pos === 'left' ? '#1a3050' : 'transparent' },
     ticks: { color, font: { size: 10 } },
     title: { display: true, text: label, color, font: { size: 10 } },
+    afterFit: s => { s.width = Y_WIDTH; },
     ...(min != null ? { min } : {}),
     ...(max != null ? { max } : {}),
   };
@@ -375,11 +378,13 @@ function render(ds, filename) {
       type: 'linear', position: 'left',
       grid:  { color: '#1a3050' },
       ticks: { color: '#607090', font: { size: 10 } },
+      afterFit: s => { s.width = Y_WIDTH; },
     };
     cfg.options.scales.y2 = {
       type: 'linear', position: 'right',
       grid:  { color: 'transparent' },
       ticks: { color: '#607090', font: { size: 10 } },
+      afterFit: s => { s.width = Y_WIDTH; },
     };
     /* ツールチップに単位を付ける */
     cfg.options.plugins.tooltip = {
