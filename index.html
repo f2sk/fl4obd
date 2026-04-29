@@ -67,10 +67,10 @@ body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-he
 
 /* SUB ROW */
 .sub-row{display:flex;justify-content:space-between;background:#0a1520;
-  border:1px solid #1a2a3a;border-radius:8px;padding:7px 10px;margin-bottom:8px;}
-.sub-item{display:flex;flex-direction:column;align-items:center;gap:1px;}
-.sub-item .sl{font-size:9px;color:#2a5a7a;letter-spacing:1px;}
-.sub-item .sv{font-size:13px;font-weight:bold;color:#c8d8e8;}
+  border:1px solid #1a2a3a;border-radius:8px;padding:14px 16px;margin-bottom:8px;}
+.sub-item{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.sub-item .sl{font-size:12px;color:#2a5a7a;letter-spacing:1px;}
+.sub-item .sv{font-size:22px;font-weight:bold;color:#c8d8e8;}
 .sub-item .sv.cur{color:#cc44ff;}
 
 .demo-note{text-align:center;font-size:9px;color:#1a3a5a;letter-spacing:1px;padding:4px 0;}
@@ -200,15 +200,15 @@ body.landscape .meter-card {
 <div class="sub-row">
   <div class="sub-item">
     <span class="sl">VBAT</span>
-    <span class="sv" id="subVbat">--.- <small style="font-size:8px;color:#2a5a7a">V</small></span>
+    <span class="sv" id="subVbat">--.- <small style="font-size:12px;color:#2a5a7a">V</small></span>
   </div>
   <div class="sub-item">
     <span class="sl">CURRENT</span>
-    <span class="sv cur" id="subCur">--.- <small style="font-size:8px;color:#2a5a7a">A</small></span>
+    <span class="sv cur" id="subCur">--.- <small style="font-size:12px;color:#2a5a7a">A</small></span>
   </div>
   <div class="sub-item">
     <span class="sl">SYS V</span>
-    <span class="sv" id="subSysv">--.- <small style="font-size:8px;color:#2a5a7a">V</small></span>
+    <span class="sv" id="subSysv">--.- <small style="font-size:12px;color:#2a5a7a">V</small></span>
   </div>
   <div class="sub-item">
     <span class="sl">RUNTIME</span>
@@ -415,15 +415,15 @@ function render() {
 
   // Sub row
   document.getElementById('subVbat').innerHTML =
-    D.vbat ? D.vbat.toFixed(1) + ' <small style="font-size:8px;color:#2a5a7a">V</small>'
-           : '--.- <small style="font-size:8px;color:#2a5a7a">V</small>';
+    D.vbat ? D.vbat.toFixed(1) + ' <small style="font-size:12px;color:#2a5a7a">V</small>'
+           : '--.- <small style="font-size:12px;color:#2a5a7a">V</small>';
   document.getElementById('subSysv').innerHTML =
-    systemVolt ? systemVolt.toFixed(1) + ' <small style="font-size:8px;color:#2a5a7a">V</small>'
-               : '--.- <small style="font-size:8px;color:#2a5a7a">V</small>';
+    systemVolt ? systemVolt.toFixed(1) + ' <small style="font-size:12px;color:#2a5a7a">V</small>'
+               : '--.- <small style="font-size:12px;color:#2a5a7a">V</small>';
   const curAbs = Math.abs(D.ibat);
   document.getElementById('subCur').innerHTML =
     (curAbs >= 100 ? D.ibat.toFixed(0) : D.ibat.toFixed(1)) +
-    ' <small style="font-size:8px;color:#2a5a7a">A</small>';
+    ' <small style="font-size:12px;color:#2a5a7a">A</small>';
 
   // Runtime
   const rtSec = getRtSec();
@@ -683,7 +683,7 @@ async function sendRaw(s) {
 // ─── ポーリング ───────────────────────────────────────────
 // レスポンス駆動: onRx で '>' 受信 → 即次PID送信
 // ウォッチドッグ(200ms)は無応答(NO DATA等)時のフォールバック
-const CMDS = ['010C', '019A', '010D', '015B'];
+const CMDS = ['010C', '019A', '010D', '015B', '0142'];
 let cmdIdx = 0;
 
 function sendNextPid() {
@@ -723,17 +723,10 @@ async function initElm() {
     await new Promise(r => setTimeout(r, d));
   }
 
-  // Runtime(PID 0x1F)をTA_ENG(0x10)で1回だけ取得してからTA_BATTに戻す
+  // Runtime(PID 0x1F)をTA_BATTで1回だけ取得
   try {
-    await sendRaw('ATSH18DAF110');
-    await new Promise(r => setTimeout(r, 100));
     await sendRaw('011F');
     await new Promise(r => setTimeout(r, 300));
-    await sendRaw('ATSH18DAF101');
-    await new Promise(r => setTimeout(r, 100));
-    await sendRaw('ATFCSH18DAF101');
-    await new Promise(r => setTimeout(r, 100));
-    currentTa = 0x01;
   } catch(e) {}
 }
 
