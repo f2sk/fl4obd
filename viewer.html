@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FL4 OBD LOG VIEWER</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:     #0a1520;
+      --card:   #112233;
+      --border: #1a3050;
+      --accent: #00ffcc;
+      --text:   #c0d8f0;
+      --muted:  #607090;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', monospace;
+      min-height: 100vh;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+      font-size: 0.9rem;
+      letter-spacing: 2px;
+      color: var(--accent);
+    }
+    #changeFileBtn {
+      display: none;
+      margin-left: auto;
+      cursor: pointer;
+      font-size: 0.75rem;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 10px;
+      background: transparent;
+    }
+    #changeFileBtn:hover { color: var(--text); border-color: var(--muted); }
+
+    /* Drop zone */
+    #dropZone {
+      max-width: 480px;
+      margin: 60px auto;
+      padding: 60px 20px;
+      text-align: center;
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    #dropZone:hover,
+    #dropZone.drag { border-color: var(--accent); background: rgba(0,255,204,0.03); }
+    #dropZone h2  { font-size: 1rem; margin-bottom: 8px; }
+    #dropZone p   { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+    #fileInput    { display: none; }
+
+    /* Charts area */
+    #charts {
+      display: none;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    #fileInfo {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      font-size: 0.72rem;
+      color: var(--muted);
+      padding: 4px 0 16px;
+    }
+    #fileInfo span b { color: var(--text); }
+
+    /* Chart card */
+    .chart-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 14px;
+    }
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .chart-title {
+      font-size: 0.7rem;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+    }
+    .chart-toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+    .toggle-btn {
+      font-size: 0.68rem;
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid currentColor;
+      background: transparent;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .toggle-btn.off { opacity: 0.3; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>FL4 OBD LOG VIEWER</h1>
+  <button id="changeFileBtn">ファイル変更</button>
+</header>
+
+<div id="dropZone">
+  <h2>ログファイルをドロップ</h2>
+  <p>または クリックしてファイルを選択</p>
+  <p style="margin-top:12px">fl4obd_*.txt</p>
+</div>
+<input type="file" id="fileInput" accept=".txt">
+
+<div id="charts">
+  <div id="fileInfo"></div>
+
+  <div class="chart-card" id="cardVehicle">
+    <div class="chart-header">
+      <span class="chart-title">VEHICLE</span>
+      <div class="chart-toggles" id="togVehicle"></div>
+    </div>
+    <canvas id="cVehicle"></canvas>
+  </div>
+
+  <div class="chart-card" id="cardPbat">
+    <div class="chart-header">
+      <span class="chart-title">BATTERY POWER</span>
+      <div class="chart-toggles" id="togPbat"></div>
+    </div>
+    <canvas id="cPbat"></canvas>
+  </div>
+
+  <div class="chart-card" id="cardHvbat">
+    <div class="chart-header">
+      <span class="chart-title">HV BATTERY</span>
+      <div class="chart-toggles" id="togHvbat"></div>
+    </div>
+    <canvas id="cHvbat"></canvas>
+  </div>
+
+  <div class="chart-card" id="cardSoc">
+    <div class="chart-header">
+      <span class="chart-title">STATE OF CHARGE</span>
+      <div class="chart-toggles" id="togSoc"></div>
+    </div>
+    <canvas id="cSoc"></canvas>
+  </div>
+
+  <div class="chart-card" id="cardSysv" style="display:none">
+    <div class="chart-header">
+      <span class="chart-title">SYSTEM VOLTAGE (12V)</span>
+      <div class="chart-toggles" id="togSysv"></div>
+    </div>
+    <canvas id="cSysv"></canvas>
+  </div>
+</div>
+
+<script>
+const charts = {};
+
+/* ── ファイル入力 ─────────────────────────────────────────── */
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag');
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) loadFile(fileInput.files[0]);
+  fileInput.value = '';
+});
+document.getElementById('changeFileBtn').addEventListener('click', () => fileInput.click());
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => render(parseLog(e.target.result), file.name);
+  reader.readAsText(file);
+}
+
+/* ── ログパーサ ───────────────────────────────────────────── */
+function parseLog(text) {
+  const ds = {
+    speed: [], rpm: [],
+    vbat: [], ibat: [], pbat: [],
+    soc: [], sysv: []
+  };
+  let startMs = null;
+
+  function extractMs(line) {
+    const m = line.match(/^\[(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]/);
+    if (!m) return null;
+    return +m[1] * 3600000 + +m[2] * 60000 + +m[3] * 1000 + +m[4];
+  }
+
+  for (const line of text.split('\n')) {
+    const ms = extractMs(line);
+    if (ms === null) continue;
+    if (startMs === null) startMs = ms;
+    const t = (ms - startMs) / 1000;
+
+    /* VBAT/IBAT: [9A] CF= で既にデコード済みの値を使う */
+    const cfm = line.match(/\[9A\] CF=.* ibat=([0-9.-]+)A vbat=([0-9.-]+)V/);
+    if (cfm) {
+      const ibat = parseFloat(cfm[1]);
+      const vbat = parseFloat(cfm[2]);
+      ds.vbat.push({ x: t, y: vbat });
+      ds.ibat.push({ x: t, y: ibat });
+      ds.pbat.push({ x: t, y: +(vbat * ibat / 1000).toFixed(2) });
+      continue;
+    }
+
+    /* PID生レスポンス: [ok ] ← 行 */
+    const okm = line.match(/\[ok \] ← (.+)/);
+    if (!okm) continue;
+
+    const last = {};
+    for (const tok of okm[1].trim().split(/\s+/)) {
+      const u = tok.toUpperCase();
+      if (u.startsWith('410C') && u.length >= 8) {
+        const a = parseInt(u.slice(4, 6), 16), b = parseInt(u.slice(6, 8), 16);
+        if (!isNaN(a + b)) last.rpm = Math.round((256 * a + b) / 4);
+      } else if (u.startsWith('410D') && u.length >= 6) {
+        const a = parseInt(u.slice(4, 6), 16);
+        if (!isNaN(a)) last.speed = a;
+      } else if (u.startsWith('415B') && u.length >= 6) {
+        const a = parseInt(u.slice(4, 6), 16);
+        if (!isNaN(a)) last.soc = +(100 * a / 255).toFixed(1);
+      } else if (u.startsWith('4142') && u.length >= 8) {
+        const a = parseInt(u.slice(4, 6), 16), b = parseInt(u.slice(6, 8), 16);
+        if (!isNaN(a + b)) last.sysv = +((256 * a + b) / 1000).toFixed(2);
+      }
+    }
+    for (const [k, v] of Object.entries(last)) ds[k].push({ x: t, y: v });
+  }
+
+  return ds;
+}
+
+/* ── チャート描画 ─────────────────────────────────────────── */
+const C = {
+  speed: '#00ffcc', rpm: '#4488ff',
+  vbat:  '#ff6688', ibat: '#88ffaa', pbat: '#ffaa00',
+  soc:   '#00ccff', sysv: '#cc88ff'
+};
+
+function scaleOpt(label, color, pos = 'left', min, max) {
+  return {
+    type: 'linear', position: pos,
+    grid:  { color: pos === 'left' ? '#1a3050' : 'transparent' },
+    ticks: { color, font: { size: 10 } },
+    title: { display: true, text: label, color, font: { size: 10 } },
+    ...(min != null ? { min } : {}),
+    ...(max != null ? { max } : {}),
+  };
+}
+
+function baseCfg() {
+  return {
+    type: 'scatter',
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+      elements: {
+        point: { radius: 0 },
+        line:  { borderWidth: 1.5, tension: 0 }
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          grid:  { color: '#1a3050' },
+          ticks: { color: '#607090', font: { size: 10 } },
+          title: { display: true, text: 's', color: '#607090', font: { size: 10 } }
+        }
+      }
+    }
+  };
+}
+
+function makeToggles(containerId, chartKey, defs) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  defs.forEach(({ label, color }, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'toggle-btn';
+    btn.textContent = label;
+    btn.style.color = color;
+    btn.addEventListener('click', () => {
+      const ch = charts[chartKey];
+      const ds = ch.data.datasets[i];
+      ds.hidden = !ds.hidden;
+      btn.classList.toggle('off', !!ds.hidden);
+      ch.update();
+    });
+    el.appendChild(btn);
+  });
+}
+
+function destroyAll() {
+  for (const [k, ch] of Object.entries(charts)) { ch.destroy(); delete charts[k]; }
+}
+
+function render(ds, filename) {
+  destroyAll();
+
+  const allPts = [...ds.speed, ...ds.vbat, ...ds.rpm, ...ds.soc];
+  const duration = allPts.reduce((m, p) => Math.max(m, p.x), 0);
+
+  document.getElementById('dropZone').style.display = 'none';
+  document.getElementById('charts').style.display = 'block';
+  document.getElementById('changeFileBtn').style.display = 'inline';
+
+  document.getElementById('fileInfo').innerHTML = [
+    `<span>${filename}</span>`,
+    `<span>時間: <b>${duration.toFixed(0)} s</b></span>`,
+    ds.speed.length  ? `<span>Speed: <b>${ds.speed.length}点</b></span>`   : '',
+    ds.rpm.length    ? `<span>RPM: <b>${ds.rpm.length}点</b></span>`       : '',
+    ds.vbat.length   ? `<span>VBAT: <b>${ds.vbat.length}点</b></span>`    : '',
+    ds.soc.length    ? `<span>SOC: <b>${ds.soc.length}点</b></span>`      : '',
+    ds.sysv.length   ? `<span>SysV: <b>${ds.sysv.length}点</b></span>`    : '',
+  ].join('');
+
+  /* --- Speed / RPM --- */
+  {
+    const cfg = baseCfg();
+    cfg.data = {
+      datasets: [
+        { label: 'Speed (km/h)', data: ds.speed, showLine: true, borderColor: C.speed, yAxisID: 'y',  fill: false },
+        { label: 'RPM',          data: ds.rpm,   showLine: true, borderColor: C.rpm,   yAxisID: 'y2', fill: false },
+      ]
+    };
+    cfg.options.scales.y  = scaleOpt('km/h', C.speed, 'left',  0);
+    cfg.options.scales.y2 = scaleOpt('rpm',  C.rpm,   'right', 0);
+    charts.vehicle = new Chart(document.getElementById('cVehicle'), cfg);
+    makeToggles('togVehicle', 'vehicle', [
+      { label: 'Speed (km/h)', color: C.speed },
+      { label: 'RPM',          color: C.rpm   },
+    ]);
+  }
+
+  /* --- Battery Power --- */
+  {
+    const cfg = baseCfg();
+    cfg.data = {
+      datasets: [
+        { label: 'Power (kW)', data: ds.pbat, showLine: true, borderColor: C.pbat, yAxisID: 'y', fill: false }
+      ]
+    };
+    cfg.options.scales.y = scaleOpt('kW', C.pbat, 'left');
+    charts.pbat = new Chart(document.getElementById('cPbat'), cfg);
+    makeToggles('togPbat', 'pbat', [{ label: 'Power (kW)', color: C.pbat }]);
+  }
+
+  /* --- HV Battery V / A --- */
+  {
+    const cfg = baseCfg();
+    cfg.data = {
+      datasets: [
+        { label: 'VBAT (V)', data: ds.vbat, showLine: true, borderColor: C.vbat, yAxisID: 'y',  fill: false },
+        { label: 'IBAT (A)', data: ds.ibat, showLine: true, borderColor: C.ibat, yAxisID: 'y2', fill: false },
+      ]
+    };
+    cfg.options.scales.y  = scaleOpt('V', C.vbat, 'left');
+    cfg.options.scales.y2 = scaleOpt('A', C.ibat, 'right');
+    charts.hvbat = new Chart(document.getElementById('cHvbat'), cfg);
+    makeToggles('togHvbat', 'hvbat', [
+      { label: 'VBAT (V)', color: C.vbat },
+      { label: 'IBAT (A)', color: C.ibat },
+    ]);
+  }
+
+  /* --- SOC --- */
+  {
+    const cfg = baseCfg();
+    cfg.data = {
+      datasets: [
+        { label: 'SOC (%)', data: ds.soc, showLine: true, borderColor: C.soc, yAxisID: 'y', fill: false }
+      ]
+    };
+    cfg.options.scales.y = scaleOpt('%', C.soc, 'left', 0, 100);
+    charts.soc = new Chart(document.getElementById('cSoc'), cfg);
+    makeToggles('togSoc', 'soc', [{ label: 'SOC (%)', color: C.soc }]);
+  }
+
+  /* --- SysV (存在する場合のみ表示) --- */
+  document.getElementById('cardSysv').style.display = ds.sysv.length ? 'block' : 'none';
+  if (ds.sysv.length) {
+    const cfg = baseCfg();
+    cfg.data = {
+      datasets: [
+        { label: 'SysV (V)', data: ds.sysv, showLine: true, borderColor: C.sysv, yAxisID: 'y', fill: false }
+      ]
+    };
+    cfg.options.scales.y = scaleOpt('V', C.sysv, 'left');
+    charts.sysv = new Chart(document.getElementById('cSysv'), cfg);
+    makeToggles('togSysv', 'sysv', [{ label: 'SysV (V)', color: C.sysv }]);
+  }
+}
+</script>
+</body>
+</html>
