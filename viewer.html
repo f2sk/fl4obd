@@ -144,6 +144,14 @@
     </div>
     <canvas id="cBattery"></canvas>
   </div>
+
+  <div class="chart-card" id="cardSysv" style="display:none">
+    <div class="chart-header">
+      <span class="chart-title">SYSTEM VOLTAGE (12V)</span>
+      <div class="chart-toggles" id="togSysv"></div>
+    </div>
+    <canvas id="cSysv"></canvas>
+  </div>
 </div>
 
 <script>
@@ -344,12 +352,12 @@ function render(ds, filename) {
       'Power (kW)': 'kW', 'SOC (%)': '%',
       'VBAT (V)': 'V', 'IBAT (A)': 'A', 'SysV (V)': 'V'
     };
+    // 左軸: Power(kW), IBAT(A)  右軸: SOC(%), VBAT(V), SysV(V)
     const battDefs = [
-      { label: 'Power (kW)', data: ds.pbat, color: C.pbat },
-      { label: 'SOC (%)',    data: ds.soc,  color: C.soc  },
-      { label: 'VBAT (V)',   data: ds.vbat, color: C.vbat },
-      { label: 'IBAT (A)',   data: ds.ibat, color: C.ibat },
-      ...(ds.sysv.length ? [{ label: 'SysV (V)', data: ds.sysv, color: C.sysv }] : []),
+      { label: 'Power (kW)', data: ds.pbat, color: C.pbat, axis: 'y'  },
+      { label: 'IBAT (A)',   data: ds.ibat, color: C.ibat, axis: 'y'  },
+      { label: 'SOC (%)',    data: ds.soc,  color: C.soc,  axis: 'y2' },
+      { label: 'VBAT (V)',   data: ds.vbat, color: C.vbat, axis: 'y2' },
     ];
 
     const cfg = baseCfg();
@@ -359,13 +367,18 @@ function render(ds, filename) {
         data: d.data,
         showLine: true,
         borderColor: d.color,
-        yAxisID: 'y',
+        yAxisID: d.axis,
         fill: false,
       }))
     };
     cfg.options.scales.y = {
       type: 'linear', position: 'left',
       grid:  { color: '#1a3050' },
+      ticks: { color: '#607090', font: { size: 10 } },
+    };
+    cfg.options.scales.y2 = {
+      type: 'linear', position: 'right',
+      grid:  { color: 'transparent' },
       ticks: { color: '#607090', font: { size: 10 } },
     };
     /* ツールチップに単位を付ける */
@@ -381,6 +394,20 @@ function render(ds, filename) {
     };
     charts.battery = new Chart(document.getElementById('cBattery'), cfg);
     makeToggles('togBattery', 'battery', battDefs.map(d => ({ label: d.label, color: d.color })));
+  }
+
+  /* --- SysV (独立ウィンドウ、データがある場合のみ表示) --- */
+  document.getElementById('cardSysv').style.display = ds.sysv.length ? 'block' : 'none';
+  if (ds.sysv.length) {
+    const cfg = baseCfg();
+    cfg.data = {
+      datasets: [
+        { label: 'SysV (V)', data: ds.sysv, showLine: true, borderColor: C.sysv, yAxisID: 'y', fill: false }
+      ]
+    };
+    cfg.options.scales.y = scaleOpt('V', C.sysv, 'left');
+    charts.sysv = new Chart(document.getElementById('cSysv'), cfg);
+    makeToggles('togSysv', 'sysv', [{ label: 'SysV (V)', color: C.sysv }]);
   }
 }
 </script>
