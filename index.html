@@ -73,6 +73,7 @@ body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-he
 .sub-item .sv{font-size:22px;font-weight:bold;color:#c8d8e8;}
 .sub-item .sv.cur{color:#cc44ff;}
 
+
 .demo-note{text-align:center;font-size:9px;color:#1a3a5a;letter-spacing:1px;padding:4px 0;}
 
 ::-webkit-scrollbar{width:3px;}
@@ -176,16 +177,13 @@ body.landscape .meter-card {
   <!-- SOC -->
   <div class="meter-card">
     <svg class="m-svg" viewBox="0 0 200 200" id="svgSoc">
-      <defs>
-        <linearGradient id="gSoc" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%"   stop-color="#cc4400"/>
-          <stop offset="40%"  stop-color="#ffaa00"/>
-          <stop offset="100%" stop-color="#00ffcc"/>
-        </linearGradient>
-      </defs>
       <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">STATE OF CHARGE</text>
-      <path id="bgSoc" fill="none" stroke="#1a2a3a" stroke-width="10" stroke-linecap="round"/>
-      <path id="arcSoc" fill="none" stroke="url(#gSoc)" stroke-width="10" stroke-linecap="round"/>
+      <!-- 固定色帯: 低域(0-25%)赤 / 正常域(25-85%)シアン / 過充電域(85-100%)オレンジ -->
+      <path id="bgSocLo"   fill="none" stroke="#661100" stroke-width="10" stroke-linecap="round"/>
+      <path id="bgSocNorm" fill="none" stroke="#007755" stroke-width="10" stroke-linecap="round"/>
+      <path id="bgSocHi"   fill="none" stroke="#664400" stroke-width="10" stroke-linecap="round"/>
+      <!-- 未達部分オーバーレイ: SOC以降をカード背景色で塗り隠す -->
+      <path id="arcSoc" fill="none" stroke="#0a1520" stroke-width="12" stroke-linecap="butt"/>
       <line id="barSoc" stroke="#00ffcc" stroke-width="4" stroke-linecap="round"/>
       <text id="valSoc" x="100" y="105" dominant-baseline="middle" text-anchor="middle" fill="#00ffcc" font-size="52" font-weight="bold" font-family="Courier New">--</text>
       <text x="100" y="133" text-anchor="middle" fill="#2a5a7a" font-size="11" font-family="Courier New" letter-spacing="1">%</text>
@@ -213,6 +211,24 @@ body.landscape .meter-card {
   <div class="sub-item">
     <span class="sl">RUNTIME</span>
     <span class="sv" id="subTime">--:--:--</span>
+  </div>
+</div>
+
+<!-- TEMP エリア: ボタン or 温度表示 -->
+<button class="conn-btn" id="tempToggleBtn" onclick="toggleTemp()"
+  style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;margin-bottom:8px;">[ TEMP ]</button>
+<div class="sub-row" id="optRow" style="display:none;cursor:pointer;margin-bottom:8px;" onclick="toggleTemp()">
+  <div class="sub-item">
+    <span class="sl">ENG TEMP</span>
+    <span class="sv" id="subEngTemp">-- <small style="font-size:12px;color:#2a5a7a">℃</small></span>
+  </div>
+  <div class="sub-item">
+    <span class="sl">CAT TEMP</span>
+    <span class="sv" id="subCatTemp">-- <small style="font-size:12px;color:#2a5a7a">℃</small></span>
+  </div>
+  <div class="sub-item">
+    <span class="sl">INT TEMP</span>
+    <span class="sv" id="subIntTemp">-- <small style="font-size:12px;color:#2a5a7a">℃</small></span>
   </div>
 </div>
 
@@ -318,7 +334,11 @@ function initBgArc(id) {
   const el = document.getElementById(id);
   el.setAttribute('d', arcPath(DEG_START, DEG_END));
 }
-['bgRpm','bgSpd','bgPwr','bgSoc'].forEach(initBgArc);
+['bgRpm','bgSpd','bgPwr'].forEach(initBgArc);
+// SOC固定色帯 (円弧に沿って色ゾーンを固定描画)
+document.getElementById('bgSocLo').setAttribute('d',   arcPath(DEG_START, DEG_START + 0.25 * 280));
+document.getElementById('bgSocNorm').setAttribute('d', arcPath(DEG_START + 0.25 * 280, DEG_START + 0.85 * 280));
+document.getElementById('bgSocHi').setAttribute('d',   arcPath(DEG_START + 0.85 * 280, DEG_END));
 
 // 値弧: ratio 0〜1 で左端から右端へ
 function setArc(id, ratio) {
@@ -373,7 +393,8 @@ function initCenterMark() {
 initCenterMark();
 
 // ─── Vehicle data ─────────────────────────────────────────
-const D = { engRot:0, soc:NaN, vbat:0, ibat:0, pbat:0, vsp:0 };
+const D = { engRot:0, soc:NaN, vbat:0, ibat:0, pbat:0, vsp:0,
+            engTemp:NaN, catTemp:NaN, intTemp:NaN };
 let systemVolt = 0;
 let runTimeBase = 0;
 let syncTimeMs  = null;
@@ -405,10 +426,18 @@ function render() {
   // SOC 0-100
   const socValid = !isNaN(D.soc);
   const socR = socValid ? Math.max(0, Math.min(D.soc, 100)) / 100 : 0;
-  const nc = !socValid ? '#2a5a7a' : D.soc < 20 ? '#ff4444' : D.soc < 50 ? '#ffaa00' : '#00ffcc';
-  setArc('arcSoc', socR);
-  setBar('barSoc', DEG_START + socR * 280, nc);
-  document.getElementById('barSoc').setAttribute('stroke', nc);
+  // HEV自然域: 25〜85%。域外は警告色
+  const nc = !socValid ? '#2a5a7a'
+           : D.soc < 25 ? '#ff4444'   // 枯渇域
+           : D.soc > 85 ? '#ffaa00'   // 過充電域
+           : '#00ffcc';               // 正常域
+  // 未達部分オーバーレイ: SOC位置から終端まで暗くする
+  const socDeg = DEG_START + socR * 280;
+  const arcSocEl = document.getElementById('arcSoc');
+  arcSocEl.setAttribute('d', socR >= 1
+    ? `M${arcPoint(DEG_END).x.toFixed(2)},${arcPoint(DEG_END).y.toFixed(2)}`
+    : arcPath(socDeg, DEG_END));
+  setBar('barSoc', socDeg, nc);
   const socEl = document.getElementById('valSoc');
   socEl.textContent = socValid ? D.soc.toFixed(1) : '--';
   socEl.setAttribute('fill', nc);
@@ -424,6 +453,18 @@ function render() {
   document.getElementById('subCur').innerHTML =
     (curAbs >= 100 ? D.ibat.toFixed(0) : D.ibat.toFixed(1)) +
     ' <small style="font-size:12px;color:#2a5a7a">A</small>';
+
+  // Optional temps
+  const fmtTemp = (v, id) => {
+    document.getElementById(id).innerHTML = isNaN(v)
+      ? '-- <small style="font-size:12px;color:#2a5a7a">℃</small>'
+      : v.toFixed(1) + ' <small style="font-size:12px;color:#2a5a7a">℃</small>';
+  };
+  if (tempEnabled) {
+    fmtTemp(D.engTemp, 'subEngTemp');
+    fmtTemp(D.catTemp, 'subCatTemp');
+    fmtTemp(D.intTemp, 'subIntTemp');
+  }
 
   // Runtime
   const rtSec = getRtSec();
@@ -509,6 +550,12 @@ function decodeService01(bytes) {
       syncTimeMs  = Date.now(); break;
     case 0x42: // Control Module Voltage = (A*256+B)/1000 [V]
       systemVolt = ((d[2] << 8) | d[3]) / 1000.0; break;
+    case 0x67: // Engine coolant temp (multi-sensor) A=bitmap B=sensor1 C=sensor2
+      if (d[2] & 0x01) D.engTemp = d[3] - 40; break;
+    case 0x3C: // Catalyst temp = (A*256+B)/10 - 40 [℃]
+      D.catTemp = ((d[2] << 8) | d[3]) / 10.0 - 40.0; break;
+    case 0x68: // Intake air temp (multi-sensor) A=bitmap B=sensor1
+      if (d[2] & 0x01) D.intTemp = d[3] - 40; break;
   }
   D.pbat = D.vbat * D.ibat * 0.001;
 }
@@ -683,15 +730,41 @@ async function sendRaw(s) {
 // ─── ポーリング ───────────────────────────────────────────
 // レスポンス駆動: onRx で '>' 受信 → 即次PID送信
 // ウォッチドッグ(200ms)は無応答(NO DATA等)時のフォールバック
-const CMDS = ['010C', '019A', '010D', '015B', '0142'];
+const BASE_CMDS = ['010C', '019A', '010D', '015B', '0142'];
+
+let tempEnabled = false;
+
+let cmdQueue = [...BASE_CMDS];
 let cmdIdx = 0;
+
+function buildCmdQueue() {
+  const q = [...BASE_CMDS];
+  if (tempEnabled) {
+    q.push('ATSH18DAF110');
+    q.push('0167');
+    q.push('013C');
+    q.push('0168');
+    q.push('ATSH18DAF101');
+    q.push('ATFCSH18DAF101');
+  }
+  cmdQueue = q;
+  cmdIdx = 0;
+}
+
+function toggleTemp() {
+  tempEnabled = !tempEnabled;
+  document.getElementById('tempToggleBtn').style.display = tempEnabled ? 'none' : '';
+  document.getElementById('optRow').style.display = tempEnabled ? '' : 'none';
+  if (!tempEnabled) { D.engTemp = D.catTemp = D.intTemp = NaN; }
+  buildCmdQueue();
+}
 
 function sendNextPid() {
   if (!connected) return;
   clearTimeout(pollWatchdog);
-  const pid = CMDS[cmdIdx];
-  cmdIdx = (cmdIdx + 1) % CMDS.length;
-  try { sendRaw(pid); } catch(e) { log('✗ send err: ' + e.message, 'e'); }
+  const cmd = cmdQueue[cmdIdx];
+  cmdIdx = (cmdIdx + 1) % cmdQueue.length;
+  try { sendRaw(cmd); } catch(e) { log('✗ send err: ' + e.message, 'e'); }
   pollWatchdog = setTimeout(sendNextPid, 200);
 }
 
@@ -854,7 +927,7 @@ function setUI(s) {
 }
 
 // ─── DEMO ─────────────────────────────────────────────────
-let dRpm = 800, dSpd = 0, dTw = 25, dTcat = 120, dSoc = 78;
+let dRpm = 800, dSpd = 0, dTw = 25, dTcat = 120, dSoc = 78, dSocPhase = 0;
 let demoRunning = false;
 
 function demoTick() {
@@ -862,7 +935,8 @@ function demoTick() {
   dSpd  = Math.max(0,    Math.min(160,  dSpd  + (Math.random() - .45) * 12));
   dTw   = Math.min(95,   dTw   + .2);
   dTcat = Math.min(800,  dTcat + (Math.random() - .3) * 15);
-  dSoc  = Math.max(20,   Math.min(95, dSoc - Math.random() * 0.04));
+  dSocPhase += 0.15; // 約25秒で全域1往復
+  dSoc = 53.5 + 38.5 * Math.sin(dSocPhase); // 15〜92% をサイン波で往復
   D.engRot = dRpm;
   D.vsp    = dSpd;
   D.soc    = dSoc;
@@ -870,6 +944,9 @@ function demoTick() {
   D.ibat   = (Math.random() - .4) * 120;
   D.pbat   = D.vbat * D.ibat * 0.001;
   systemVolt = 12.4 + Math.random() * .4;
+  D.engTemp = 85 + Math.random() * 5;
+  D.catTemp = 420 + Math.random() * 20;
+  D.intTemp = 28 + Math.random() * 3;
   // デモ用ランタイム: 初回tickでsync
   if (syncTimeMs === null) { runTimeBase = 0; syncTimeMs = Date.now(); }
 }
