@@ -122,9 +122,10 @@
 <div id="dropZone">
   <h2>ログファイルをドロップ</h2>
   <p>または クリックしてファイルを選択</p>
-  <p style="margin-top:12px">fl4obd_*.txt</p>
+  <p style="margin-top:12px">データログ: fl4obd_data_*.csv</p>
+  <p>デバッグログ: fl4obd_*.txt</p>
 </div>
-<input type="file" id="fileInput" accept=".txt">
+<input type="file" id="fileInput" accept=".txt,.csv">
 
 <div id="charts">
   <div id="fileInfo"></div>
@@ -143,6 +144,14 @@
       <div class="chart-toggles" id="togBattery"></div>
     </div>
     <canvas id="cBattery"></canvas>
+  </div>
+
+  <div class="chart-card" id="cardTemp" style="display:none">
+    <div class="chart-header">
+      <span class="chart-title">TEMPERATURE</span>
+      <div class="chart-toggles" id="togTemp"></div>
+    </div>
+    <canvas id="cTemp"></canvas>
   </div>
 
   <div class="chart-card" id="cardSysv" style="display:none">
@@ -177,17 +186,54 @@ document.getElementById('changeFileBtn').addEventListener('click', () => fileInp
 
 function loadFile(file) {
   const reader = new FileReader();
-  reader.onload = e => render(parseLog(e.target.result), file.name);
+  reader.onload = e => {
+    const text = e.target.result;
+    const fmt = detectFormat(text);
+    const ds = fmt === 'csv' ? parseCsvLog(text) : parseDebugLog(text);
+    render(ds, file.name, fmt);
+  };
   reader.readAsText(file);
 }
 
-/* ── ログパーサ ───────────────────────────────────────────── */
-function parseLog(text) {
-  const ds = {
-    speed: [], rpm: [],
-    vbat: [], ibat: [], pbat: [],
-    soc: [], sysv: []
-  };
+/* ── フォーマット判別 ─────────────────────────────────────── */
+function detectFormat(text) {
+  const first = text.trimStart().split('\n')[0];
+  return first.startsWith('timestamp,') ? 'csv' : 'debug';
+}
+
+/* ── CSVデータログパーサ ──────────────────────────────────── */
+// 列: timestamp,rpm,speed_kmh,hv_volt_V,hv_curr_A,hv_power_kW,soc_pct,lv_volt_V,eng_temp_C,cat_temp_C,int_temp_C
+function parseCsvLog(text) {
+  const ds = emptyDs();
+  const lines = text.trim().split('\n');
+  let t0 = null;
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',');
+    if (cols.length < 8) continue;
+    const ts = new Date(cols[0]).getTime();
+    if (isNaN(ts)) continue;
+    if (t0 === null) t0 = ts;
+    const t = (ts - t0) / 1000;
+
+    const push = (arr, v) => { const n = parseFloat(v); if (!isNaN(n)) arr.push({ x: t, y: n }); };
+    push(ds.rpm,     cols[1]);
+    push(ds.speed,   cols[2]);
+    push(ds.vbat,    cols[3]);
+    push(ds.ibat,    cols[4]);
+    push(ds.pbat,    cols[5]);
+    push(ds.soc,     cols[6]);
+    push(ds.sysv,    cols[7]);
+    push(ds.engTemp, cols[8]);
+    push(ds.catTemp, cols[9]);
+    push(ds.intTemp, cols[10]);
+  }
+  return ds;
+}
+
+/* ── デバッグログパーサ ───────────────────────────────────── */
+function parseDebugLog(text) {
+  const ds = emptyDs();
   let startMs = null;
 
   function extractMs(line) {
@@ -202,7 +248,7 @@ function parseLog(text) {
     if (startMs === null) startMs = ms;
     const t = (ms - startMs) / 1000;
 
-    /* VBAT/IBAT: [9A] CF= で既にデコード済みの値を使う */
+    // 9A: applyMulti9A が出力するデコード済みログ行から取得
     const cfm = line.match(/\[9A\] CF=.* ibat=([0-9.-]+)A vbat=([0-9.-]+)V/);
     if (cfm) {
       const ibat = parseFloat(cfm[1]);
@@ -213,41 +259,59 @@ function parseLog(text) {
       continue;
     }
 
-    /* PID生レスポンス: [ok ] ← 行 */
+    // シングルフレームPID: [ok ] ← 行の生フレームをデコード
     const okm = line.match(/\[ok \] ← (.+)/);
     if (!okm) continue;
+    const raw = okm[1].trim().toUpperCase();
 
     const last = {};
-    for (const tok of okm[1].trim().split(/\s+/)) {
-      const u = tok.toUpperCase();
-      if (u.startsWith('410C') && u.length >= 8) {
-        const a = parseInt(u.slice(4, 6), 16), b = parseInt(u.slice(6, 8), 16);
-        if (!isNaN(a + b)) last.rpm = Math.round((256 * a + b) / 4);
-      } else if (u.startsWith('410D') && u.length >= 6) {
-        const a = parseInt(u.slice(4, 6), 16);
+    for (const tok of raw.split(/\s+/)) {
+      if (tok.startsWith('410C') && tok.length >= 8) {
+        const a = parseInt(tok.slice(4,6), 16), b = parseInt(tok.slice(6,8), 16);
+        if (!isNaN(a+b)) last.rpm = Math.round((256*a+b)/4);
+      } else if (tok.startsWith('410D') && tok.length >= 6) {
+        const a = parseInt(tok.slice(4,6), 16);
         if (!isNaN(a)) last.speed = a;
-      } else if (u.startsWith('415B') && u.length >= 6) {
-        const a = parseInt(u.slice(4, 6), 16);
-        if (!isNaN(a)) last.soc = +(100 * a / 255).toFixed(1);
-      } else if (u.startsWith('4142') && u.length >= 8) {
-        const a = parseInt(u.slice(4, 6), 16), b = parseInt(u.slice(6, 8), 16);
-        if (!isNaN(a + b)) last.sysv = +((256 * a + b) / 1000).toFixed(2);
+      } else if (tok.startsWith('415B') && tok.length >= 6) {
+        const a = parseInt(tok.slice(4,6), 16);
+        if (!isNaN(a)) last.soc = +(100*a/255).toFixed(1);
+      } else if (tok.startsWith('4142') && tok.length >= 8) {
+        const a = parseInt(tok.slice(4,6), 16), b = parseInt(tok.slice(6,8), 16);
+        if (!isNaN(a+b)) last.sysv = +((256*a+b)/1000).toFixed(2);
+      } else if (tok.startsWith('4167') && tok.length >= 8) {
+        const bitmap = parseInt(tok.slice(4,6), 16), s1 = parseInt(tok.slice(6,8), 16);
+        if (!isNaN(bitmap) && (bitmap & 0x01)) last.engTemp = s1 - 40;
+      } else if (tok.startsWith('413C') && tok.length >= 8) {
+        const a = parseInt(tok.slice(4,6), 16), b = parseInt(tok.slice(6,8), 16);
+        if (!isNaN(a+b)) last.catTemp = +((256*a+b)/10 - 40).toFixed(1);
+      } else if (tok.startsWith('4168') && tok.length >= 8) {
+        const bitmap = parseInt(tok.slice(4,6), 16), s1 = parseInt(tok.slice(6,8), 16);
+        if (!isNaN(bitmap) && (bitmap & 0x01)) last.intTemp = s1 - 40;
       }
     }
     for (const [k, v] of Object.entries(last)) ds[k].push({ x: t, y: v });
   }
-
   return ds;
+}
+
+function emptyDs() {
+  return {
+    speed: [], rpm: [],
+    vbat: [], ibat: [], pbat: [],
+    soc: [], sysv: [],
+    engTemp: [], catTemp: [], intTemp: []
+  };
 }
 
 /* ── チャート描画 ─────────────────────────────────────────── */
 const C = {
-  speed: '#00ffcc', rpm: '#4488ff',
-  vbat:  '#ff6688', ibat: '#88ffaa', pbat: '#ffaa00',
-  soc:   '#00ccff', sysv: '#cc88ff'
+  speed:   '#00ffcc', rpm:     '#4488ff',
+  vbat:    '#ff6688', ibat:    '#88ffaa', pbat: '#ffaa00',
+  soc:     '#00ccff', sysv:    '#cc88ff',
+  engTemp: '#ff8844', catTemp: '#ff4444', intTemp: '#44aaff'
 };
 
-const Y_WIDTH = 55; // 全チャートで左右軸幅を統一してX軸を揃える
+const Y_WIDTH = 55;
 
 function scaleOpt(label, color, pos = 'left', min, max) {
   return {
@@ -305,9 +369,8 @@ function makeToggles(containerId, chartKey, defs, onToggle) {
   });
 }
 
-/* 表示中の系列からラベル名(括弧内)を収集して軸タイトルを更新 */
-function syncBattAxesLabels(chart) {
-  for (const axisId of ['y', 'y2']) {
+function syncAxesLabels(chart, axisIds) {
+  for (const axisId of axisIds) {
     const units = chart.data.datasets
       .filter(d => d.yAxisID === axisId && !d.hidden)
       .map(d => d.label.match(/\((.+)\)$/)?.[1] ?? '')
@@ -320,10 +383,10 @@ function destroyAll() {
   for (const [k, ch] of Object.entries(charts)) { ch.destroy(); delete charts[k]; }
 }
 
-function render(ds, filename) {
+function render(ds, filename, fmt) {
   destroyAll();
 
-  const allPts = [...ds.speed, ...ds.vbat, ...ds.rpm, ...ds.soc];
+  const allPts = [...ds.speed, ...ds.vbat, ...ds.rpm, ...ds.soc, ...ds.engTemp];
   const duration = allPts.reduce((m, p) => Math.max(m, p.x), 0);
 
   document.getElementById('dropZone').style.display = 'none';
@@ -332,12 +395,16 @@ function render(ds, filename) {
 
   document.getElementById('fileInfo').innerHTML = [
     `<span>${filename}</span>`,
+    `<span>形式: <b>${fmt === 'csv' ? 'データログ' : 'デバッグログ'}</b></span>`,
     `<span>時間: <b>${duration.toFixed(0)} s</b></span>`,
-    ds.speed.length  ? `<span>Speed: <b>${ds.speed.length}点</b></span>`   : '',
-    ds.rpm.length    ? `<span>RPM: <b>${ds.rpm.length}点</b></span>`       : '',
-    ds.vbat.length   ? `<span>VBAT: <b>${ds.vbat.length}点</b></span>`    : '',
-    ds.soc.length    ? `<span>SOC: <b>${ds.soc.length}点</b></span>`      : '',
-    ds.sysv.length   ? `<span>SysV: <b>${ds.sysv.length}点</b></span>`    : '',
+    ds.speed.length   ? `<span>Speed: <b>${ds.speed.length}点</b></span>`     : '',
+    ds.rpm.length     ? `<span>RPM: <b>${ds.rpm.length}点</b></span>`         : '',
+    ds.vbat.length    ? `<span>VBAT: <b>${ds.vbat.length}点</b></span>`       : '',
+    ds.soc.length     ? `<span>SOC: <b>${ds.soc.length}点</b></span>`         : '',
+    ds.sysv.length    ? `<span>SysV: <b>${ds.sysv.length}点</b></span>`       : '',
+    ds.engTemp.length ? `<span>EngTemp: <b>${ds.engTemp.length}点</b></span>` : '',
+    ds.catTemp.length ? `<span>CatTemp: <b>${ds.catTemp.length}点</b></span>` : '',
+    ds.intTemp.length ? `<span>IntTemp: <b>${ds.intTemp.length}点</b></span>` : '',
   ].join('');
 
   /* --- Speed / RPM --- */
@@ -358,32 +425,20 @@ function render(ds, filename) {
     ]);
   }
 
-  /* --- Battery: Power / SOC / VBAT / IBAT / SysV ---
-     全系列を単一Y軸（自動スケール）に配置。
-     単独表示時は自動的にその系列の値域に合わせて軸が伸縮する。
-     ツールチップで単位付き実値を確認できる。 */
+  /* --- Battery: Power / SOC / VBAT / IBAT --- */
   {
-    const UNITS = {
-      'Power (kW)': 'kW', 'SOC (%)': '%',
-      'VBAT (V)': 'V', 'IBAT (A)': 'A', 'SysV (V)': 'V'
-    };
-    // 左軸: Power(kW), IBAT(A)  右軸: SOC(%), VBAT(V), SysV(V)
     const battDefs = [
       { label: 'Power (kW)', data: ds.pbat, color: C.pbat, axis: 'y'  },
       { label: 'IBAT (A)',   data: ds.ibat, color: C.ibat, axis: 'y'  },
       { label: 'SOC (%)',    data: ds.soc,  color: C.soc,  axis: 'y2' },
       { label: 'VBAT (V)',   data: ds.vbat, color: C.vbat, axis: 'y2' },
     ];
-
+    const UNITS = { 'Power (kW)': 'kW', 'SOC (%)': '%', 'VBAT (V)': 'V', 'IBAT (A)': 'A' };
     const cfg = baseCfg();
     cfg.data = {
       datasets: battDefs.map(d => ({
-        label: d.label,
-        data: d.data,
-        showLine: true,
-        borderColor: d.color,
-        yAxisID: d.axis,
-        fill: false,
+        label: d.label, data: d.data, showLine: true,
+        borderColor: d.color, yAxisID: d.axis, fill: false,
       }))
     };
     cfg.options.scales.y = {
@@ -400,23 +455,43 @@ function render(ds, filename) {
       title: { display: true, text: '', color: '#607090', font: { size: 10 } },
       afterFit: s => { s.width = Y_WIDTH; },
     };
-    /* ツールチップに単位を付ける */
     cfg.options.plugins.tooltip = {
-      mode: 'index',
-      intersect: false,
+      mode: 'index', intersect: false,
       callbacks: {
-        label: ctx => {
-          const unit = UNITS[ctx.dataset.label] ?? '';
-          return ` ${ctx.dataset.label}: ${ctx.parsed.y} ${unit}`;
-        }
+        label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} ${UNITS[ctx.dataset.label] ?? ''}`
       }
     };
     charts.battery = new Chart(document.getElementById('cBattery'), cfg);
-    syncBattAxesLabels(charts.battery);
-    makeToggles('togBattery', 'battery', battDefs.map(d => ({ label: d.label, color: d.color })), syncBattAxesLabels);
+    syncAxesLabels(charts.battery, ['y', 'y2']);
+    makeToggles('togBattery', 'battery',
+      battDefs.map(d => ({ label: d.label, color: d.color })),
+      ch => syncAxesLabels(ch, ['y', 'y2']));
   }
 
-  /* --- SysV (独立ウィンドウ、データがある場合のみ表示) --- */
+  /* --- Temperature (データがある場合のみ表示) --- */
+  const hasTemp = ds.engTemp.length || ds.catTemp.length || ds.intTemp.length;
+  document.getElementById('cardTemp').style.display = hasTemp ? 'block' : 'none';
+  if (hasTemp) {
+    const tempDefs = [
+      { label: 'Eng Temp (°C)', data: ds.engTemp, color: C.engTemp, axis: 'y'  },
+      { label: 'Cat Temp (°C)', data: ds.catTemp, color: C.catTemp, axis: 'y2' },
+      { label: 'Int Temp (°C)', data: ds.intTemp, color: C.intTemp, axis: 'y'  },
+    ];
+    const cfg = baseCfg();
+    cfg.data = {
+      datasets: tempDefs.map(d => ({
+        label: d.label, data: d.data, showLine: true,
+        borderColor: d.color, yAxisID: d.axis, fill: false,
+      }))
+    };
+    // 左軸: Eng/Int Temp (0~120°C)  右軸: Cat Temp (0~900°C)
+    cfg.options.scales.y  = scaleOpt('°C', C.engTemp, 'left',  -20, 120);
+    cfg.options.scales.y2 = scaleOpt('°C', C.catTemp, 'right', 0,   900);
+    charts.temp = new Chart(document.getElementById('cTemp'), cfg);
+    makeToggles('togTemp', 'temp', tempDefs.map(d => ({ label: d.label, color: d.color })));
+  }
+
+  /* --- SysV (データがある場合のみ表示) --- */
   document.getElementById('cardSysv').style.display = ds.sysv.length ? 'block' : 'none';
   if (ds.sysv.length) {
     const cfg = baseCfg();

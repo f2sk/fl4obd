@@ -51,6 +51,8 @@ body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-he
 .conn-btn:hover  {background:#122840;border-color:#4a9eff;}
 .conn-btn:active {transform:scale(.98);}
 .conn-btn:disabled{opacity:.35;cursor:not-allowed;}
+.conn-btn.rec{border-color:#cc3333 !important;color:#cc3333 !important;animation:blink 1s infinite;}
+.conn-btn.rec:hover{border-color:#ff4444 !important;color:#ff4444 !important;}
 
 /* 2x2 ANALOG METERS — 最上部・極力大きく */
 .meters-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;}
@@ -252,6 +254,7 @@ body.landscape .meter-card {
 </div>
 
 <div style="display:flex;gap:6px;margin-bottom:0;">
+  <button class="conn-btn" id="dataBtn" onclick="toggleDataRec()" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;">[ DATA ]</button>
   <button class="conn-btn" id="demoBtn" onclick="toggleDemo()" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;">[ DEMO ]</button>
   <a href="viewer.html" target="_blank" class="conn-btn" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;text-decoration:none;display:flex;align-items:center;justify-content:center;">[ LOG VIEWER ]</a>
 </div>
@@ -261,6 +264,9 @@ body.landscape .meter-card {
 // ─── Log ─────────────────────────────────────────────────
 let logBuffer = [];
 let logRecording = false;
+let dataBuffer = [];
+let dataRecording = false;
+let dataUpdated = false;
 
 function log(msg, cls) {
   const now = new Date();
@@ -301,6 +307,47 @@ function toggleRec() {
     const a    = document.createElement('a');
     a.href = url;
     a.download = 'fl4obd_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+}
+
+function appendDataRow() {
+  const n = (v, d) => isNaN(v) ? '' : v.toFixed(d);
+  dataBuffer.push([
+    new Date().toISOString(),
+    Math.round(D.engRot),
+    D.vsp,
+    n(D.vbat, 1),
+    n(D.ibat, 1),
+    n(D.pbat, 2),
+    n(D.soc, 1),
+    n(systemVolt, 2),
+    n(D.engTemp, 1),
+    n(D.catTemp, 1),
+    n(D.intTemp, 1),
+  ].join(','));
+}
+
+function toggleDataRec() {
+  const btn = document.getElementById('dataBtn');
+  if (!dataRecording) {
+    dataBuffer = [];
+    dataRecording = true;
+    btn.textContent = '■ STOP';
+    btn.classList.add('rec');
+    log('--- DATA REC START ---', 'ok');
+  } else {
+    dataRecording = false;
+    btn.textContent = '[ DATA ]';
+    btn.classList.remove('rec');
+    if (dataBuffer.length === 0) return;
+    const header = 'timestamp,rpm,speed_kmh,hv_volt_V,hv_curr_A,hv_power_kW,soc_pct,lv_volt_V,eng_temp_C,cat_temp_C,int_temp_C';
+    const blob = new Blob([header + '\n' + dataBuffer.join('\n')], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = 'fl4obd_data_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.csv';
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -532,6 +579,7 @@ function splitFrames(hexStr) {
 // bytes[0]=0x41, bytes[1]=PID, bytes[2..]=data (0x55はパッド、無視)
 function decodeService01(bytes) {
   if (bytes[0] !== 0x41) return;
+  dataUpdated = true;
   const pid  = bytes[1];
   const d    = bytes; // d[2], d[3], ... がデータバイト
   // d[2]以降がデータバイト (スケッチのbuf[3]以降に対応)
@@ -676,12 +724,14 @@ function onRx(evt) {
     const block = parts[i];
     const preview = block.replace(/[\r\n]+/g, ' ').trim();
     if (preview) log('← ' + preview, 'ok');
+    dataUpdated = false;
     parseBlock(block);
+    if (dataUpdated && dataRecording) appendDataRow();
     if (pendingWait && block.includes(pendingWait.str)) pendingWait.resolve(block);
     gotResponse = true;
   }
   rxBuf = parts[parts.length - 1];
-  if (gotResponse && connected) sendNextPid();
+  if (gotResponse && connected && !tempFetchRunning) sendNextPid();
 }
 // ─── Screen Wake Lock ────────────────────────────────────
 let wakeLock = null;
@@ -734,21 +784,14 @@ async function sendRaw(s) {
 const BASE_CMDS = ['010C', '019A', '010D', '015B', '0142'];
 
 let tempEnabled = false;
+let tempFetchRunning = false;
+let tempInterval = null;
 
 let cmdQueue = [...BASE_CMDS];
 let cmdIdx = 0;
 
 function buildCmdQueue() {
-  const q = [...BASE_CMDS];
-  if (tempEnabled) {
-    q.push('ATSH18DAF110');
-    q.push('0167');
-    q.push('013C');
-    q.push('0168');
-    q.push('ATSH18DAF101');
-    q.push('ATFCSH18DAF101');
-  }
-  cmdQueue = q;
+  cmdQueue = [...BASE_CMDS];
   cmdIdx = 0;
 }
 
@@ -756,8 +799,14 @@ function toggleTemp() {
   tempEnabled = !tempEnabled;
   document.getElementById('tempToggleBtn').style.display = tempEnabled ? 'none' : '';
   document.getElementById('optRow').style.display = tempEnabled ? '' : 'none';
-  if (!tempEnabled) { D.engTemp = D.catTemp = D.intTemp = NaN; }
-  buildCmdQueue();
+  if (tempEnabled) {
+    doTempFetch();
+    tempInterval = setInterval(doTempFetch, 5000);
+  } else {
+    clearInterval(tempInterval);
+    tempInterval = null;
+    D.engTemp = D.catTemp = D.intTemp = NaN;
+  }
 }
 
 function sendNextPid() {
@@ -767,6 +816,47 @@ function sendNextPid() {
   cmdIdx = (cmdIdx + 1) % cmdQueue.length;
   try { sendRaw(cmd); } catch(e) { log('✗ send err: ' + e.message, 'e'); }
   pollWatchdog = setTimeout(sendNextPid, 200);
+}
+
+// TEMP個別フェッチ - メインポーリングから独立して定期実行
+async function doTempFetch() {
+  if (!connected || tempFetchRunning) return;
+  tempFetchRunning = true;
+  clearTimeout(pollWatchdog);  // メインポーリングを一時停止
+
+  try {
+    // TA=10 (エンジンECU) に切り替え
+    const sh10Wait = waitForResponse('OK', 500);
+    await sendRaw('ATSH18DAF110');
+    await sh10Wait;
+
+    // 各温度PIDを順番に取得
+    for (const [cmd, prefix] of [['0167', '4167'], ['013C', '413C'], ['0168', '4168']]) {
+      try {
+        const pWait = waitForResponse(prefix, 1000);
+        await sendRaw(cmd);
+        await pWait;
+      } catch(e) {
+        log('TEMP ' + cmd + ' タイムアウト', 'e');
+      }
+    }
+  } catch(e) {
+    log('TEMP ヘッダー切替失敗: ' + e.message, 'e');
+  } finally {
+    // TA=01 (HVバッテリーECU) に確実に復元してからメインポーリング再開
+    try {
+      const sh01Wait = waitForResponse('OK', 500);
+      await sendRaw('ATSH18DAF101');
+      await sh01Wait;
+    } catch(e) { log('TA=01 復元失敗', 'e'); }
+    try {
+      const fcWait = waitForResponse('OK', 500);
+      await sendRaw('ATFCSH18DAF101');
+      await fcWait;
+    } catch(e) { log('ATFCSH 復元失敗', 'e'); }
+    tempFetchRunning = false;
+    if (connected) sendNextPid();  // メインポーリング再開
+  }
 }
 
 async function initElm() {
@@ -797,11 +887,18 @@ async function initElm() {
     await new Promise(r => setTimeout(r, d));
   }
 
-  // Runtime(PID 0x1F)をTA_BATTで1回だけ取得
-  try {
-    await sendRaw('011F');
-    await new Promise(r => setTimeout(r, 300));
-  } catch(e) {}
+  // Runtime(PID 0x1F) - 取得できるまで最大3回リトライ
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const p = waitForResponse('411F', 500);
+      await sendRaw('011F');
+      await p;
+      break;
+    } catch(e) {
+      log('RUNTIME 取得失敗 (' + (attempt + 1) + '/3)', 'e');
+      if (attempt < 2) await new Promise(r => setTimeout(r, 200));
+    }
+  }
 }
 
 // ─── BLE接続 ─────────────────────────────────────────────
@@ -909,6 +1006,9 @@ async function toggleConnect() {
 
 function doDisc() {
   clearTimeout(pollWatchdog);
+  clearInterval(tempInterval);
+  tempInterval = null;
+  tempFetchRunning = false;
   releaseWakeLock();
   connected = false;
   if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
