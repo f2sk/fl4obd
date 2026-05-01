@@ -1,6 +1,6 @@
 # 🚗 FL4 OBD MONITOR
 
-Honda Fit (GR系) / フィットe:HEV 向け OBD-II リアルタイムモニター。
+Honda CIVIC e:HEV (FL4) 向け OBD-II リアルタイムモニター。
 ELM327 BLE ドングル経由でアナログメーター表示・HVバッテリー監視・ログ記録ができる Web アプリ。
 
 **[ツールを開く →](https://f2sk.github.io/fl4obd/)**
