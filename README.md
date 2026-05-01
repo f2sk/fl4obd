@@ -1,10 +1,19 @@
-# FL4 OBD MONITOR — 使用方法
+# 🚗 FL4 OBD MONITOR
+
+Honda Fit (GR系) / フィットe:HEV 向け OBD-II リアルタイムモニター。
+ELM327 BLE ドングル経由でアナログメーター表示・HVバッテリー監視・ログ記録ができる Web アプリ。
+
+**[ツールを開く →](https://f2sk.github.io/fl4obd/)**
+
+![スクリーンショット](docs/Screenshot.png)
+
+---
 
 ## 必要なもの
 
 - **Android スマートフォン**（Chrome ブラウザ）
 - **ELM327 BLE OBD-II ドングル**（Bluetooth 4.0以降対応のもの）
-- OBD-II ポートへの接続（車両エンジン始動またはIG-ON状態）
+- OBD-II ポートへの接続（車両エンジン始動または IG-ON 状態）
 
 > iOS (Safari) は Web Bluetooth 非対応のため使用不可。
 
@@ -12,7 +21,7 @@
 
 ## 起動手順
 
-1. OBD-II ドングルを車両の OBD ポートに挿す（通常は運転席足元のダッシュボード下）
+1. OBD-II ドングルを車両の OBD ポートに挿す（運転席足元のダッシュボード下）
 2. スマートフォンの Bluetooth をオンにする
 3. `index.html` を Chrome で開く（ローカルファイルまたは HTTPS ホスト）
 4. **[ BLUETOOTH 接続 ]** をタップ
@@ -70,7 +79,7 @@
 - Bluetooth がオンになっているか確認
 - ドングルが OBD ポートに正しく挿さっているか確認
 - Chrome ブラウザを使用しているか確認（Safari・Firefox 不可）
-- ページが HTTPS またはlocalhost で開かれているか確認
+- ページが HTTPS または localhost で開かれているか確認
 
 **データが `--` のまま**
 - エンジンが始動しているか確認（IG-ON 以上が必要）
@@ -87,9 +96,7 @@
 ## ホスティング（PC から Android に配信する場合）
 
 ```bash
-# Python が使えるなら
 python -m http.server 8080
-
 # スマートフォンから http://<PCのIPアドレス>:8080/index.html を開く
 ```
 
