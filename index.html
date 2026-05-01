@@ -785,7 +785,9 @@ const BASE_CMDS = ['010C', '019A', '010D', '015B', '0142'];
 
 let tempEnabled = false;
 let tempFetchRunning = false;
-let tempInterval = null;
+// setIntervalを廃止: メインサイクル先頭(cmdIdx=0)でのみ起動してELM327の割り込みを防ぐ
+let tempCycleCount = 0;
+const TEMP_CYCLE_INTERVAL = 25; // 5cmd × 200ms × 25 ≈ 25秒ごとに取得
 
 let cmdQueue = [...BASE_CMDS];
 let cmdIdx = 0;
@@ -799,30 +801,33 @@ function toggleTemp() {
   tempEnabled = !tempEnabled;
   document.getElementById('tempToggleBtn').style.display = tempEnabled ? 'none' : '';
   document.getElementById('optRow').style.display = tempEnabled ? '' : 'none';
-  if (tempEnabled) {
-    doTempFetch();
-    tempInterval = setInterval(doTempFetch, 5000);
-  } else {
-    clearInterval(tempInterval);
-    tempInterval = null;
-    D.engTemp = D.catTemp = D.intTemp = NaN;
-  }
+  tempCycleCount = 0;
+  if (!tempEnabled) D.engTemp = D.catTemp = D.intTemp = NaN;
 }
 
 function sendNextPid() {
   if (!connected) return;
   clearTimeout(pollWatchdog);
+  // TEMPフェッチはサイクル先頭(ELM327が応答待ちでない)タイミングのみ実行
+  if (tempEnabled && !tempFetchRunning && cmdIdx === 0) {
+    tempCycleCount++;
+    if (tempCycleCount >= TEMP_CYCLE_INTERVAL) {
+      tempCycleCount = 0;
+      doTempFetch();
+      return;
+    }
+  }
   const cmd = cmdQueue[cmdIdx];
   cmdIdx = (cmdIdx + 1) % cmdQueue.length;
   try { sendRaw(cmd); } catch(e) { log('✗ send err: ' + e.message, 'e'); }
   pollWatchdog = setTimeout(sendNextPid, 200);
 }
 
-// TEMP個別フェッチ - メインポーリングから独立して定期実行
+// TEMP個別フェッチ - サイクル先頭(cmdIdx=0)からのみ呼ばれ、ELM327割り込みを防ぐ
 async function doTempFetch() {
   if (!connected || tempFetchRunning) return;
   tempFetchRunning = true;
-  clearTimeout(pollWatchdog);  // メインポーリングを一時停止
+  clearTimeout(pollWatchdog);
 
   try {
     // TA=10 (エンジンECU) に切り替え
@@ -843,19 +848,23 @@ async function doTempFetch() {
   } catch(e) {
     log('TEMP ヘッダー切替失敗: ' + e.message, 'e');
   } finally {
-    // TA=01 (HVバッテリーECU) に確実に復元してからメインポーリング再開
-    try {
-      const sh01Wait = waitForResponse('OK', 500);
-      await sendRaw('ATSH18DAF101');
-      await sh01Wait;
-    } catch(e) { log('TA=01 復元失敗', 'e'); }
-    try {
-      const fcWait = waitForResponse('OK', 500);
-      await sendRaw('ATFCSH18DAF101');
-      await fcWait;
-    } catch(e) { log('ATFCSH 復元失敗', 'e'); }
+    // TA=01 (HVバッテリーECU) の設定を完全復元
+    for (const [cmd, label] of [
+      ['ATSH18DAF101',   'ATSH'],
+      ['ATFCSH18DAF101', 'ATFCSH'],
+      ['ATFCSD300000',   'ATFCSD'],
+      ['ATFCSM1',        'ATFCSM'],
+    ]) {
+      try {
+        const w = waitForResponse('OK', 500);
+        await sendRaw(cmd);
+        await w;
+      } catch(e) { log(label + ' 復元失敗', 'e'); }
+    }
+    await new Promise(r => setTimeout(r, 100));
     tempFetchRunning = false;
-    if (connected) sendNextPid();  // メインポーリング再開
+    buildCmdQueue();
+    if (connected) sendNextPid();
   }
 }
 
@@ -1006,9 +1015,8 @@ async function toggleConnect() {
 
 function doDisc() {
   clearTimeout(pollWatchdog);
-  clearInterval(tempInterval);
-  tempInterval = null;
   tempFetchRunning = false;
+  tempCycleCount = 0;
   releaseWakeLock();
   connected = false;
   if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
