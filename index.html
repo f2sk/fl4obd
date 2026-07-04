@@ -96,37 +96,10 @@ body.landscape .meter-card {
 <body>
 <div class="app">
 
-<!-- 2x2 ANALOG METERS -->
+<!-- 3x2 ANALOG METERS -->
 <div class="meters-grid">
 
-  <!-- RPM -->
-  <div class="meter-card">
-    <svg class="m-svg" viewBox="0 0 200 200" id="svgRpm">
-      <defs>
-        <linearGradient id="gRpm" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#1a5aff"/>
-          <stop offset="100%" stop-color="#4a9eff"/>
-        </linearGradient>
-      </defs>
-      <!-- ラベル -->
-      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">ENGINE RPM</text>
-      <!-- 目盛り弧 (bg) -->
-      <path id="bgRpm" fill="none" stroke="#1a2a3a" stroke-width="10" stroke-linecap="round"/>
-      <!-- 値弧 -->
-      <path id="arcRpm" fill="none" stroke="url(#gRpm)" stroke-width="10" stroke-linecap="round"/>
-      <!-- インジケーターバー (半径方向) -->
-      <line id="barRpm" stroke="#4a9eff" stroke-width="4" stroke-linecap="round"/>
-      <!-- デジタル値 — 円の直径（最下部）付近に大きく -->
-      <text id="valRpm" x="100" y="105" dominant-baseline="middle" text-anchor="middle" fill="#4a9eff" font-size="52" font-weight="bold" font-family="Courier New">0</text>
-      <!-- 単位 -->
-      <text x="100" y="133" text-anchor="middle" fill="#2a5a7a" font-size="11" font-family="Courier New" letter-spacing="1">rpm</text>
-      <!-- スケール -->
-      <text x="22" y="178" text-anchor="middle" fill="#1e3a5a" font-size="10" font-family="Courier New">0</text>
-      <text x="178" y="178" text-anchor="middle" fill="#1e3a5a" font-size="10" font-family="Courier New">8k</text>
-    </svg>
-  </div>
-
-  <!-- SPEED -->
+  <!-- Vsp (vehicle speed) — spd_echo 2920(104,16,BE,u)/258.3 -->
   <div class="meter-card">
     <svg class="m-svg" viewBox="0 0 200 200" id="svgSpd">
       <defs>
@@ -135,7 +108,7 @@ body.landscape .meter-card {
           <stop offset="100%" stop-color="#00ff88"/>
         </linearGradient>
       </defs>
-      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">SPEED</text>
+      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">Vsp  SPEED</text>
       <path id="bgSpd" fill="none" stroke="#1a2a3a" stroke-width="10" stroke-linecap="round"/>
       <path id="arcSpd" fill="none" stroke="url(#gSpd)" stroke-width="10" stroke-linecap="round"/>
       <line id="barSpd" stroke="#00ff88" stroke-width="4" stroke-linecap="round"/>
@@ -146,7 +119,54 @@ body.landscape .meter-card {
     </svg>
   </div>
 
-  <!-- BATTERY PWR -->
+  <!-- Psys (system output) — 0.000147*drv_trq3*Vsp (+直結 Peng) -->
+  <div class="meter-card">
+    <svg class="m-svg" viewBox="0 0 200 200" id="svgPsys">
+      <defs>
+        <linearGradient id="gPsysP" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#0a6a7a"/>
+          <stop offset="100%" stop-color="#00e5ff"/>
+        </linearGradient>
+        <linearGradient id="gPsysN" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#cc44ff"/>
+          <stop offset="100%" stop-color="#7722aa"/>
+        </linearGradient>
+      </defs>
+      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">Psys  SYS OUT</text>
+      <path id="bgPsys" fill="none" stroke="#1a2a3a" stroke-width="10" stroke-linecap="round"/>
+      <path id="arcPsysN" fill="none" stroke="url(#gPsysN)" stroke-width="10" stroke-linecap="round"/>
+      <path id="arcPsysP" fill="none" stroke="url(#gPsysP)" stroke-width="10" stroke-linecap="round"/>
+      <line id="centerPsys" stroke="#3a5a7a" stroke-width="2" stroke-linecap="round"/>
+      <line id="barPsys" stroke="#00e5ff" stroke-width="4" stroke-linecap="round"/>
+      <text id="valPsys" x="100" y="105" dominant-baseline="middle" text-anchor="middle" fill="#00e5ff" font-size="46" font-weight="bold" font-family="Courier New">0.0</text>
+      <text x="100" y="133" text-anchor="middle" fill="#2a5a7a" font-size="11" font-family="Courier New" letter-spacing="1">kW</text>
+      <text x="22" y="180" text-anchor="middle" fill="#2a3a1a" font-size="10" font-family="Courier New">-140</text>
+      <text x="100" y="186" text-anchor="middle" fill="#2a3a1a" font-size="10" font-family="Courier New">0</text>
+      <text x="178" y="180" text-anchor="middle" fill="#2a3a1a" font-size="10" font-family="Courier New">+140</text>
+    </svg>
+  </div>
+
+  <!-- Peng (engine power) — 2.09e-6*eng_trq*ENGrpm -->
+  <div class="meter-card">
+    <svg class="m-svg" viewBox="0 0 200 200" id="svgPeng">
+      <defs>
+        <linearGradient id="gPeng" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#aa3311"/>
+          <stop offset="100%" stop-color="#ff5533"/>
+        </linearGradient>
+      </defs>
+      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">Peng  ENG PWR</text>
+      <path id="bgPeng" fill="none" stroke="#1a2a3a" stroke-width="10" stroke-linecap="round"/>
+      <path id="arcPeng" fill="none" stroke="url(#gPeng)" stroke-width="10" stroke-linecap="round"/>
+      <line id="barPeng" stroke="#ff5533" stroke-width="4" stroke-linecap="round"/>
+      <text id="valPeng" x="100" y="105" dominant-baseline="middle" text-anchor="middle" fill="#ff5533" font-size="46" font-weight="bold" font-family="Courier New">0.0</text>
+      <text x="100" y="133" text-anchor="middle" fill="#2a5a7a" font-size="11" font-family="Courier New" letter-spacing="1">kW</text>
+      <text x="22" y="178" text-anchor="middle" fill="#1e3a5a" font-size="10" font-family="Courier New">0</text>
+      <text x="178" y="178" text-anchor="middle" fill="#1e3a5a" font-size="10" font-family="Courier New">110</text>
+    </svg>
+  </div>
+
+  <!-- Pbat (battery power) — batt_pwr 2920(672,16,BE,s)*0.0100 -->
   <div class="meter-card">
     <svg class="m-svg" viewBox="0 0 200 200" id="svgPwr">
       <defs>
@@ -159,13 +179,10 @@ body.landscape .meter-card {
           <stop offset="100%" stop-color="#7722aa"/>
         </linearGradient>
       </defs>
-      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">BATTERY PWR</text>
+      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">Pbat  BATT PWR</text>
       <path id="bgPwr" fill="none" stroke="#1a2a3a" stroke-width="10" stroke-linecap="round"/>
-      <!-- 負側弧(充電=紫) -->
       <path id="arcPwrN" fill="none" stroke="url(#gPwrN)" stroke-width="10" stroke-linecap="round"/>
-      <!-- 正側弧(放電=橙) -->
       <path id="arcPwrP" fill="none" stroke="url(#gPwrP)" stroke-width="10" stroke-linecap="round"/>
-      <!-- 中央マーク -->
       <line id="centerPwr" stroke="#3a5a7a" stroke-width="2" stroke-linecap="round"/>
       <line id="barPwr" stroke="#ffaa00" stroke-width="4" stroke-linecap="round"/>
       <text id="valPwr" x="100" y="105" dominant-baseline="middle" text-anchor="middle" fill="#ffaa00" font-size="48" font-weight="bold" font-family="Courier New">0.0</text>
@@ -176,15 +193,33 @@ body.landscape .meter-card {
     </svg>
   </div>
 
-  <!-- SOC -->
+  <!-- ENGrpm — eng_rpm 2920(784,16,BE,u)/4 -->
+  <div class="meter-card">
+    <svg class="m-svg" viewBox="0 0 200 200" id="svgRpm">
+      <defs>
+        <linearGradient id="gRpm" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#1a5aff"/>
+          <stop offset="100%" stop-color="#4a9eff"/>
+        </linearGradient>
+      </defs>
+      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">ENGrpm</text>
+      <path id="bgRpm" fill="none" stroke="#1a2a3a" stroke-width="10" stroke-linecap="round"/>
+      <path id="arcRpm" fill="none" stroke="url(#gRpm)" stroke-width="10" stroke-linecap="round"/>
+      <line id="barRpm" stroke="#4a9eff" stroke-width="4" stroke-linecap="round"/>
+      <text id="valRpm" x="100" y="105" dominant-baseline="middle" text-anchor="middle" fill="#4a9eff" font-size="52" font-weight="bold" font-family="Courier New">0</text>
+      <text x="100" y="133" text-anchor="middle" fill="#2a5a7a" font-size="11" font-family="Courier New" letter-spacing="1">rpm</text>
+      <text x="22" y="178" text-anchor="middle" fill="#1e3a5a" font-size="10" font-family="Courier New">0</text>
+      <text x="178" y="178" text-anchor="middle" fill="#1e3a5a" font-size="10" font-family="Courier New">8k</text>
+    </svg>
+  </div>
+
+  <!-- Psoc (SOC) — PID 015B -->
   <div class="meter-card">
     <svg class="m-svg" viewBox="0 0 200 200" id="svgSoc">
-      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">STATE OF CHARGE</text>
-      <!-- 固定色帯: 低域(0-25%)赤 / 正常域(25-85%)シアン / 過充電域(85-100%)オレンジ -->
+      <text x="100" y="18" text-anchor="middle" fill="#2a5a7a" font-size="10" font-family="Courier New" letter-spacing="2">Psoc  SOC</text>
       <path id="bgSocLo"   fill="none" stroke="#661100" stroke-width="10" stroke-linecap="round"/>
       <path id="bgSocNorm" fill="none" stroke="#007755" stroke-width="10" stroke-linecap="round"/>
       <path id="bgSocHi"   fill="none" stroke="#664400" stroke-width="10" stroke-linecap="round"/>
-      <!-- 未達部分オーバーレイ: SOC以降をカード背景色で塗り隠す -->
       <path id="arcSoc" fill="none" stroke="#0a1520" stroke-width="12" stroke-linecap="butt"/>
       <line id="barSoc" stroke="#00ffcc" stroke-width="4" stroke-linecap="round"/>
       <text id="valSoc" x="100" y="105" dominant-baseline="middle" text-anchor="middle" fill="#00ffcc" font-size="52" font-weight="bold" font-family="Courier New">--</text>
@@ -196,41 +231,19 @@ body.landscape .meter-card {
 
 </div>
 
-<!-- SUB ROW: VBAT / CURRENT / SYS V / RUNTIME -->
-<div class="sub-row">
+<!-- TEXT ROW: RunMode / Vsys / RunTime -->
+<div class="sub-row" style="margin-bottom:8px;">
   <div class="sub-item">
-    <span class="sl">VBAT</span>
-    <span class="sv" id="subVbat">--.- <small style="font-size:12px;color:#2a5a7a">V</small></span>
+    <span class="sl">RUN MODE</span>
+    <span class="sv" id="txtMode">--</span>
   </div>
   <div class="sub-item">
-    <span class="sl">CURRENT</span>
-    <span class="sv cur" id="subCur">--.- <small style="font-size:12px;color:#2a5a7a">A</small></span>
-  </div>
-  <div class="sub-item">
-    <span class="sl">SYS V</span>
-    <span class="sv" id="subSysv">--.- <small style="font-size:12px;color:#2a5a7a">V</small></span>
+    <span class="sl">Vsys</span>
+    <span class="sv" id="txtVsys">--.- <small style="font-size:12px;color:#2a5a7a">V</small></span>
   </div>
   <div class="sub-item">
     <span class="sl">RUNTIME</span>
-    <span class="sv" id="subTime">--:--:--</span>
-  </div>
-</div>
-
-<!-- TEMP エリア: ボタン or 温度表示 -->
-<button class="conn-btn" id="tempToggleBtn" onclick="toggleTemp()"
-  style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;margin-bottom:8px;">[ TEMP ]</button>
-<div class="sub-row" id="optRow" style="display:none;cursor:pointer;margin-bottom:8px;" onclick="toggleTemp()">
-  <div class="sub-item">
-    <span class="sl">ENG TEMP</span>
-    <span class="sv" id="subEngTemp">-- <small style="font-size:12px;color:#2a5a7a">℃</small></span>
-  </div>
-  <div class="sub-item">
-    <span class="sl">CAT TEMP</span>
-    <span class="sv" id="subCatTemp">-- <small style="font-size:12px;color:#2a5a7a">℃</small></span>
-  </div>
-  <div class="sub-item">
-    <span class="sl">INT TEMP</span>
-    <span class="sv" id="subIntTemp">-- <small style="font-size:12px;color:#2a5a7a">℃</small></span>
+    <span class="sv" id="txtTime">--:--:--</span>
   </div>
 </div>
 
@@ -317,15 +330,13 @@ function appendDataRow() {
   dataBuffer.push([
     new Date().toISOString(),
     Math.round(D.engRot),
-    D.vsp,
-    n(D.vbat, 1),
-    n(D.ibat, 1),
+    n(D.vsp, 1),
+    n(D.psys, 2),
+    n(D.peng, 2),
     n(D.pbat, 2),
     n(D.soc, 1),
     n(systemVolt, 2),
-    n(D.engTemp, 1),
-    n(D.catTemp, 1),
-    n(D.intTemp, 1),
+    (D.runMode >= 0 ? (MODE_LABELS[D.runMode] || ('0x'+D.runMode.toString(16))) : ''),
   ].join(','));
 }
 
@@ -342,7 +353,7 @@ function toggleDataRec() {
     btn.textContent = '[ DATA ]';
     btn.classList.remove('rec');
     if (dataBuffer.length === 0) return;
-    const header = 'timestamp,rpm,speed_kmh,hv_volt_V,hv_curr_A,hv_power_kW,soc_pct,lv_volt_V,eng_temp_C,cat_temp_C,int_temp_C';
+    const header = 'timestamp,eng_rpm,vsp_kmh,psys_kW,peng_kW,pbat_kW,soc_pct,vsys_V,run_mode';
     const blob = new Blob([header + '\n' + dataBuffer.join('\n')], { type: 'text/csv' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
@@ -382,7 +393,7 @@ function initBgArc(id) {
   const el = document.getElementById(id);
   el.setAttribute('d', arcPath(DEG_START, DEG_END));
 }
-['bgRpm','bgSpd','bgPwr'].forEach(initBgArc);
+['bgRpm','bgSpd','bgPwr','bgPsys','bgPeng'].forEach(initBgArc);
 // SOC固定色帯 (円弧に沿って色ゾーンを固定描画)
 document.getElementById('bgSocLo').setAttribute('d',   arcPath(DEG_START, DEG_START + 0.25 * 280));
 document.getElementById('bgSocNorm').setAttribute('d', arcPath(DEG_START + 0.25 * 280, DEG_START + 0.85 * 280));
@@ -429,21 +440,23 @@ function setBar(id, deg, color) {
   if (color) el.setAttribute('stroke', color);
 }
 
-// 中央マーク初期化 (PWR用)
-function initCenterMark() {
+// 中央マーク初期化 (双極ゲージ用: Pbat/Psys)
+function initCenterMark(id) {
   const center = DEG_START + 140;
   const r = deg2rad(center - 90);
   const cos = Math.cos(r), sin = Math.sin(r);
-  const el = document.getElementById('centerPwr');
+  const el = document.getElementById(id);
   el.setAttribute('x1', (CX + (R-8)*cos).toFixed(2));  el.setAttribute('y1', (CY + (R-8)*sin).toFixed(2));
   el.setAttribute('x2', (CX + (R+8)*cos).toFixed(2));  el.setAttribute('y2', (CY + (R+8)*sin).toFixed(2));
 }
-initCenterMark();
+initCenterMark('centerPwr');
+initCenterMark('centerPsys');
 
 // ─── Vehicle data ─────────────────────────────────────────
-const D = { engRot:0, soc:NaN, vbat:0, ibat:0, pbat:0, vsp:0,
-            engTemp:NaN, catTemp:NaN, intTemp:NaN };
+const D = { engRot:0, soc:NaN, pbat:0, vsp:0, psys:0, peng:0, runMode:-1 };
 let systemVolt = 0;
+// RunMode コード → ラベル
+const MODE_LABELS = { 0x20:'EV', 0x40:'SERIES', 0x50:'DIRECT', 0x70:'DIRECT', 0x60:'TRANS', 0x10:'TRANS', 0x30:'TRANS' };
 let runTimeBase = 0;
 let syncTimeMs  = null;
 
@@ -454,24 +467,35 @@ function getRtSec() {
 
 // ─── Render ───────────────────────────────────────────────
 function render() {
-  // RPM 0-8000
-  const rpmR = Math.max(0, Math.min(D.engRot, 8000)) / 8000;
-  setArc('arcRpm', rpmR);
-  setBar('barRpm', DEG_START + rpmR * 280, '#4a9eff');
-  document.getElementById('valRpm').textContent = Math.round(D.engRot);
-
-  // Speed 0-180
+  // Vsp 0-180 (svgSpd を再利用)
   const spdR = Math.max(0, Math.min(D.vsp, 180)) / 180;
   setArc('arcSpd', spdR);
   setBar('barSpd', DEG_START + spdR * 280, '#00ff88');
   document.getElementById('valSpd').textContent = Math.round(D.vsp);
 
-  // Battery PWR bipolar -50..+50 kW
+  // Psys 双極 ±140 kW
+  const psysR = Math.max(-1, Math.min(D.psys / 140, 1));
+  setBiArc('arcPsysP', 'arcPsysN', 'barPsys', 'valPsys', psysR, '#00e5ff', '#cc44ff');
+  document.getElementById('valPsys').textContent = D.psys.toFixed(1);
+
+  // Peng 0-110 kW
+  const pengR = Math.max(0, Math.min(D.peng, 110)) / 110;
+  setArc('arcPeng', pengR);
+  setBar('barPeng', DEG_START + pengR * 280, '#ff5533');
+  document.getElementById('valPeng').textContent = D.peng.toFixed(1);
+
+  // Pbat 双極 -50..+50 kW (svgPwr を再利用)
   const pwrR = Math.max(-1, Math.min(D.pbat / 50, 1));
   setBiArc('arcPwrP', 'arcPwrN', 'barPwr', 'valPwr', pwrR, '#ffaa00', '#cc44ff');
   document.getElementById('valPwr').textContent = D.pbat.toFixed(1);
 
-  // SOC 0-100
+  // ENGrpm 0-8000 (svgRpm を再利用)
+  const rpmR = Math.max(0, Math.min(D.engRot, 8000)) / 8000;
+  setArc('arcRpm', rpmR);
+  setBar('barRpm', DEG_START + rpmR * 280, '#4a9eff');
+  document.getElementById('valRpm').textContent = Math.round(D.engRot);
+
+  // Psoc 0-100
   const socValid = !isNaN(D.soc);
   const socR = socValid ? Math.max(0, Math.min(D.soc, 100)) / 100 : 0;
   // HEV自然域: 25〜85%。域外は警告色
@@ -490,39 +514,25 @@ function render() {
   socEl.textContent = socValid ? D.soc.toFixed(1) : '--';
   socEl.setAttribute('fill', nc);
 
-  // Sub row
-  document.getElementById('subVbat').innerHTML =
-    D.vbat ? D.vbat.toFixed(1) + ' <small style="font-size:12px;color:#2a5a7a">V</small>'
-           : '--.- <small style="font-size:12px;color:#2a5a7a">V</small>';
-  document.getElementById('subSysv').innerHTML =
+  // Text row: RunMode
+  document.getElementById('txtMode').textContent =
+    (D.runMode >= 0 && MODE_LABELS[D.runMode]) ? MODE_LABELS[D.runMode]
+    : (D.runMode >= 0 ? '0x' + D.runMode.toString(16).toUpperCase() : '--');
+
+  // Text row: Vsys (12V)
+  document.getElementById('txtVsys').innerHTML =
     systemVolt ? systemVolt.toFixed(1) + ' <small style="font-size:12px;color:#2a5a7a">V</small>'
                : '--.- <small style="font-size:12px;color:#2a5a7a">V</small>';
-  const curAbs = Math.abs(D.ibat);
-  document.getElementById('subCur').innerHTML =
-    (curAbs >= 100 ? D.ibat.toFixed(0) : D.ibat.toFixed(1)) +
-    ' <small style="font-size:12px;color:#2a5a7a">A</small>';
 
-  // Optional temps
-  const fmtTemp = (v, id) => {
-    document.getElementById(id).innerHTML = isNaN(v)
-      ? '-- <small style="font-size:12px;color:#2a5a7a">℃</small>'
-      : v.toFixed(1) + ' <small style="font-size:12px;color:#2a5a7a">℃</small>';
-  };
-  if (tempEnabled) {
-    fmtTemp(D.engTemp, 'subEngTemp');
-    fmtTemp(D.catTemp, 'subCatTemp');
-    fmtTemp(D.intTemp, 'subIntTemp');
-  }
-
-  // Runtime
+  // Text row: RunTime
   const rtSec = getRtSec();
   if (rtSec === null) {
-    document.getElementById('subTime').textContent = '--:--:--';
+    document.getElementById('txtTime').textContent = '--:--:--';
   } else {
     const h = Math.floor(rtSec / 3600);
     const m = Math.floor((rtSec % 3600) / 60);
     const s = rtSec % 60;
-    document.getElementById('subTime').textContent =
+    document.getElementById('txtTime').textContent =
       String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
   }
 }
@@ -606,7 +616,30 @@ function decodeService01(bytes) {
     case 0x68: // Intake air temp (multi-sensor) A=bitmap B=sensor1
       if (d[2] & 0x01) D.intTemp = d[3] - 40; break;
   }
-  D.pbat = D.vbat * D.ibat * 0.001;
+}
+
+// ─── Service 22 DID (ECU 0x07) パース ─────────────────────
+// 再組立て後の応答: 62 29 XX <payload...>  (XX=DID下位)
+// フィールドマップの byte offset N → 応答byte index = N+2
+function parse22_2920(hex) {
+  if (hex.length < 204) return;              // byte100(eng_rpm) まで必要
+  const u16 = i => parseInt(hex.substr(i * 2, 4), 16);
+  const s16 = i => { const v = u16(i); return v >= 0x8000 ? v - 0x10000 : v; };
+  const u8  = i => parseInt(hex.substr(i * 2, 2), 16);
+  const vsp    = u16(15)  / 258.3;   // spd_echo 2920(104,16,BE,u) → byte13
+  const engRpm = u16(100) / 4;       // eng_rpm  2920(784,16,BE,u) → byte98
+  const pbat   = s16(86)  * 0.0100;  // batt_pwr 2920(672,16,BE,s) → byte84
+  const engTrq = s16(96);            // eng_trq  2920(752,16,BE,s) → byte94
+  const drvTrq = s16(90);            // drv_trq3 2920(704,16,BE,s) → byte88
+  const mode   = u8(79);             // mode     2920(616, 8,flag) → byte77
+  D.vsp     = vsp;
+  D.engRot  = engRpm;
+  D.pbat    = pbat;
+  D.runMode = mode;
+  D.peng = 2.09e-6 * engTrq * engRpm;                 // エンジン機械出力 [kW]
+  const isDirect = (mode === 0x50 || mode === 0x70);  // 直結のみエンジン分を加算
+  D.psys = 0.000147 * drvTrq * vsp + (isDirect ? D.peng : 0);
+  dataUpdated = true;
 }
 
 // PID 9A マルチフレーム処理
@@ -666,10 +699,11 @@ function applyMulti9A(ff_hex, cf_hex) {
 // 戻り値: { segments: {0: hex, 1: hex, ...}, remainderHex: "後続シングル連結hex" }
 function extractSegments(line) {
   const segments = {};
-  const re = /\b(\d+):([0-9A-Fa-f]+)/g;
+  // ELM327のISO-TP行番号は16進1〜2桁 (0:〜F:、16行超で10:等)
+  const re = /\b([0-9A-Fa-f]{1,2}):([0-9A-Fa-f]+)/g;
   let m, lastEnd = 0;
   while ((m = re.exec(line)) !== null) {
-    segments[parseInt(m[1])] = m[2];
+    segments[parseInt(m[1], 16)] = m[2];
     lastEnd = m.index + m[0].length;
   }
   const remainder = line.slice(lastEnd).replace(/\s+/g, '');
@@ -682,22 +716,16 @@ function parseBlock(block) {
     .map(l => l.trim())
     .filter(l => l.length > 0 && l !== '?');
 
+  const segAll = {}; // 全行から N:hex を集約 (ISO-TP マルチフレーム再組立て用)
+
   for (const line of lines) {
     if (/^(SEARCHING|NO DATA|ERROR|UNABLE|BUS)/i.test(line)) continue;
-    if (/^[A-Za-z]/.test(line) && !/^4[0-9A-Fa-f]/i.test(line)) continue;
+    if (/^[A-Za-z]/.test(line) && !/^[46][0-9A-Fa-f]/i.test(line)) continue;
 
     // N:hex パターンを含む行（マルチフレーム関連）
-    if (/\b\d+:[0-9A-Fa-f]/.test(line)) {
+    if (/\b[0-9A-Fa-f]{1,2}:[0-9A-Fa-f]/.test(line)) {
       const { segments, remainder } = extractSegments(line);
-
-      if (segments[0]) {
-        // FF(0:)がある → FFとCF(1:)を処理
-        applyMulti9A(segments[0], segments[1]);
-      } else if (segments[1] && pendingFF) {
-        // CF(1:)のみ、かつFFが保存済み → 結合してデコード
-        applyMulti9A(pendingFF, segments[1]);
-      }
-
+      Object.assign(segAll, segments);
       // N:hexの後に続くシングルフレーム連結部分も処理
       if (remainder.length >= 14 && /^[0-9A-Fa-f]+$/.test(remainder)) {
         for (const bytes of splitFrames(remainder)) {
@@ -707,12 +735,20 @@ function parseBlock(block) {
       continue;
     }
 
-    // 純粋なシングルフレーム連結行
+    // 純粋なシングルフレーム連結行 (Service01: 415B/4142/411F 等)
     const hex = line.replace(/\s+/g, '');
     if (!/^[0-9A-Fa-f]+$/.test(hex)) continue;
     for (const bytes of splitFrames(hex)) {
       if (bytes.length >= 3) decodeService01(bytes);
     }
+  }
+
+  // 集約したセグメントを昇順連結して再組立て → Service22 応答なら解析
+  const idxs = Object.keys(segAll).map(Number).sort((a, b) => a - b);
+  if (idxs.length) {
+    let full = '';
+    for (const i of idxs) full += segAll[i];
+    if (/^6229/i.test(full)) parse22_2920(full); // 62 29 XX = ReadDataByID 応答
   }
 }
 
@@ -731,7 +767,7 @@ function onRx(evt) {
     gotResponse = true;
   }
   rxBuf = parts[parts.length - 1];
-  if (gotResponse && connected && !tempFetchRunning) sendNextPid();
+  if (gotResponse && connected) sendNextPid();
 }
 // ─── Screen Wake Lock ────────────────────────────────────
 let wakeLock = null;
@@ -779,93 +815,40 @@ async function sendRaw(s) {
 }
 
 // ─── ポーリング ───────────────────────────────────────────
-// レスポンス駆動: onRx で '>' 受信 → 即次PID送信
-// ウォッチドッグ(200ms)は無応答(NO DATA等)時のフォールバック
-const BASE_CMDS = ['010C', '019A', '010D', '015B', '0142'];
+// レスポンス駆動: onRx で '>' 受信 → 即次コマンド送信。
+// 全ECU 0x07 (ATSH18DAF107固定) から取得:
+//   222920 … 全ゲージ(Vsp/Psys/Peng/Pbat/ENGrpm/RunMode)。可能な限り高速、ただし100ms下限ガード
+//   015B   … SOC   1秒ごとに1回だけ差し込む
+//   0142   … 12V   5秒ごとに1回だけ差し込む
+const CMD_2920 = '222920';
+const MIN_2920_INTERVAL = 100; // ms  2920の下限ガード
+const SOC_INTERVAL = 1000;     // ms
+const V12_INTERVAL = 5000;     // ms
 
-let tempEnabled = false;
-let tempFetchRunning = false;
-// setIntervalを廃止: メインサイクル先頭(cmdIdx=0)でのみ起動してELM327の割り込みを防ぐ
-let tempCycleCount = 0;
-const TEMP_CYCLE_INTERVAL = 25; // 5cmd × 200ms × 25 ≈ 25秒ごとに取得
-
-let cmdQueue = [...BASE_CMDS];
-let cmdIdx = 0;
+let last2920 = 0, lastSoc = 0, lastV12 = 0;
 
 function buildCmdQueue() {
-  cmdQueue = [...BASE_CMDS];
-  cmdIdx = 0;
-}
-
-function toggleTemp() {
-  tempEnabled = !tempEnabled;
-  document.getElementById('tempToggleBtn').style.display = tempEnabled ? 'none' : '';
-  document.getElementById('optRow').style.display = tempEnabled ? '' : 'none';
-  tempCycleCount = 0;
-  if (!tempEnabled) D.engTemp = D.catTemp = D.intTemp = NaN;
+  // 接続直後: SOC/12Vを即時1回撮ってから 2920 ホットループに入る
+  const now = Date.now();
+  last2920 = 0; lastSoc = 0; lastV12 = 0;
 }
 
 function sendNextPid() {
   if (!connected) return;
   clearTimeout(pollWatchdog);
-  // TEMPフェッチはサイクル先頭(ELM327が応答待ちでない)タイミングのみ実行
-  if (tempEnabled && !tempFetchRunning && cmdIdx === 0) {
-    tempCycleCount++;
-    if (tempCycleCount >= TEMP_CYCLE_INTERVAL) {
-      tempCycleCount = 0;
-      doTempFetch();
-      return;
-    }
+  const now = Date.now();
+  let cmd;
+  if (now - lastSoc >= SOC_INTERVAL)      { cmd = '015B'; lastSoc = now; }
+  else if (now - lastV12 >= V12_INTERVAL) { cmd = '0142'; lastV12 = now; }
+  else {
+    // 2920 ホットループ + 100ms下限ガード
+    const wait = MIN_2920_INTERVAL - (now - last2920);
+    if (wait > 0) { pollWatchdog = setTimeout(sendNextPid, wait); return; }
+    cmd = CMD_2920; last2920 = now;
   }
-  const cmd = cmdQueue[cmdIdx];
-  cmdIdx = (cmdIdx + 1) % cmdQueue.length;
   try { sendRaw(cmd); } catch(e) { log('✗ send err: ' + e.message, 'e'); }
-  pollWatchdog = setTimeout(sendNextPid, 200);
-}
-
-// TEMP個別フェッチ - サイクル先頭(cmdIdx=0)からのみ呼ばれ、ELM327割り込みを防ぐ
-async function doTempFetch() {
-  if (!connected || tempFetchRunning) return;
-  tempFetchRunning = true;
-  clearTimeout(pollWatchdog);
-
-  try {
-    // TA=10 (エンジンECU) に切り替え
-    const sh10Wait = waitForResponse('OK', 500);
-    await sendRaw('ATSH18DAF110');
-    await sh10Wait;
-
-    // 各温度PIDを順番に取得
-    for (const [cmd, prefix] of [['0167', '4167'], ['013C', '413C'], ['0168', '4168']]) {
-      try {
-        const pWait = waitForResponse(prefix, 1000);
-        await sendRaw(cmd);
-        await pWait;
-      } catch(e) {
-        log('TEMP ' + cmd + ' タイムアウト', 'e');
-      }
-    }
-  } catch(e) {
-    log('TEMP ヘッダー切替失敗: ' + e.message, 'e');
-  } finally {
-    // TA=01 (HVバッテリーECU) の設定を完全復元
-    for (const [cmd, label] of [
-      ['ATSH18DAF101',   'ATSH'],
-      ['ATFCSH18DAF101', 'ATFCSH'],
-      ['ATFCSD300000',   'ATFCSD'],
-      ['ATFCSM1',        'ATFCSM'],
-    ]) {
-      try {
-        const w = waitForResponse('OK', 500);
-        await sendRaw(cmd);
-        await w;
-      } catch(e) { log(label + ' 復元失敗', 'e'); }
-    }
-    await new Promise(r => setTimeout(r, 100));
-    tempFetchRunning = false;
-    buildCmdQueue();
-    if (connected) sendNextPid();
-  }
+  // 無応答フォールバック(2920マルチフレームは重いので長め)
+  pollWatchdog = setTimeout(sendNextPid, 1500);
 }
 
 async function initElm() {
@@ -885,9 +868,9 @@ async function initElm() {
     ['ATL0',            300],
     ['ATS0',            300],
     ['ATSP0',           500],
-    // TA_BATT=0x01 をデフォルトヘッダーとして設定
-    ['ATSH18DAF101',    300],
-    ['ATFCSH18DAF101',  200],
+    // TA=0x07 (パワトレECU) を固定ヘッダーに設定。全取得(222920/015B/0142)を0x07から行う
+    ['ATSH18DAF107',    300],
+    ['ATFCSH18DAF107',  200],
     ['ATFCSD300000',    200],
     ['ATFCSM1',         200],
   ];
@@ -1005,6 +988,7 @@ async function toggleConnect() {
     setUI('on');
     log('ポーリング開始', 'ok');
     requestWakeLock();
+    buildCmdQueue();
     sendNextPid();
 
   } catch (e) {
@@ -1015,8 +999,6 @@ async function toggleConnect() {
 
 function doDisc() {
   clearTimeout(pollWatchdog);
-  tempFetchRunning = false;
-  tempCycleCount = 0;
   releaseWakeLock();
   connected = false;
   if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
@@ -1049,13 +1031,11 @@ function demoTick() {
   D.engRot = dRpm;
   D.vsp    = dSpd;
   D.soc    = dSoc;
-  D.vbat   = 350 + Math.random() * 10;
-  D.ibat   = (Math.random() - .4) * 120;
-  D.pbat   = D.vbat * D.ibat * 0.001;
+  D.pbat   = (Math.random() - .4) * 40;                      // ±kW
+  D.peng   = dRpm > 1000 ? (dRpm / 6000) * 90 * (0.6 + Math.random()*0.4) : 0;
+  D.psys   = dSpd * (0.6 + Math.random()*0.9) - (Math.random()<.15 ? 25 : 0); // 走行+時々回生
+  D.runMode = dRpm < 900 ? 0x20 : (dSpd > 70 ? 0x50 : 0x40); // EV/直結/シリーズ
   systemVolt = 12.4 + Math.random() * .4;
-  D.engTemp = 85 + Math.random() * 5;
-  D.catTemp = 420 + Math.random() * 20;
-  D.intTemp = 28 + Math.random() * 3;
   // デモ用ランタイム: 初回tickでsync
   if (syncTimeMs === null) { runTimeBase = 0; syncTimeMs = Date.now(); }
 }
