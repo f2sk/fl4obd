@@ -456,7 +456,8 @@ initCenterMark('centerPsys');
 const D = { engRot:0, soc:NaN, pbat:0, vsp:0, psys:0, peng:0, runMode:-1 };
 let systemVolt = 0;
 // RunMode コード → ラベル
-const MODE_LABELS = { 0x20:'EV', 0x40:'SERIES', 0x50:'DIRECT', 0x70:'DIRECT', 0x60:'TRANS', 0x10:'TRANS', 0x30:'TRANS' };
+// off77 の値は【10進】(20=EV/40=SERIES/50,70=DIRECT/60,30,10=TRANS)。※0x14=20 等
+const MODE_LABELS = { 20:'EV', 40:'SERIES', 50:'DIRECT', 70:'DIRECT', 60:'TRANS', 30:'TRANS', 10:'TRANS' };
 let runTimeBase = 0;
 let syncTimeMs  = null;
 
@@ -626,18 +627,18 @@ function parse22_2920(hex) {
   const u16 = i => parseInt(hex.substr(i * 2, 4), 16);
   const s16 = i => { const v = u16(i); return v >= 0x8000 ? v - 0x10000 : v; };
   const u8  = i => parseInt(hex.substr(i * 2, 2), 16);
-  const vsp    = u16(15)  / 258.3;   // spd_echo 2920(104,16,BE,u) → byte13
+  const vsp    = u16(15) > 148 ? (u16(15) - 148) / 256 : 0;  // spd_echo=256*speed+~148(ゼロ点) byte13
   const engRpm = u16(100) / 4;       // eng_rpm  2920(784,16,BE,u) → byte98
   const pbat   = s16(86)  * 0.0100;  // batt_pwr 2920(672,16,BE,s) → byte84
   const engTrq = s16(96);            // eng_trq  2920(752,16,BE,s) → byte94
   const drvTrq = s16(90);            // drv_trq3 2920(704,16,BE,s) → byte88
-  const mode   = u8(79);             // mode     2920(616, 8,flag) → byte77
+  const mode   = u8(79);             // mode     2920(616, 8,flag) → byte77 ※値は10進(20/40/50…)
   D.vsp     = vsp;
   D.engRot  = engRpm;
   D.pbat    = pbat;
   D.runMode = mode;
   D.peng = 2.09e-6 * engTrq * engRpm;                 // エンジン機械出力 [kW]
-  const isDirect = (mode === 0x50 || mode === 0x70);  // 直結のみエンジン分を加算
+  const isDirect = (mode === 50 || mode === 70);      // 直結のみエンジン分を加算(10進)
   D.psys = 0.000147 * drvTrq * vsp + (isDirect ? D.peng : 0);
   dataUpdated = true;
 }
