@@ -627,7 +627,7 @@ function parse22_2920(hex) {
   const u16 = i => parseInt(hex.substr(i * 2, 4), 16);
   const s16 = i => { const v = u16(i); return v >= 0x8000 ? v - 0x10000 : v; };
   const u8  = i => parseInt(hex.substr(i * 2, 2), 16);
-  const vsp    = u8(15);             // 車速[km/h] = off13の上位バイト(byte13)。下位は別副値
+  const vsp    = u8(15);             // 車速[km/h] = spd_echo (start104,len8)
   const engRpm = u16(100) / 4;       // eng_rpm  2920(784,16,BE,u) → byte98
   const pbat   = s16(86)  * 0.0100;  // batt_pwr 2920(672,16,BE,s) → byte84
   const engTrq = s16(96);            // eng_trq  2920(752,16,BE,s) → byte94
