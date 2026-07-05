@@ -699,16 +699,20 @@ function applyMulti9A(ff_hex, cf_hex) {
 // 1行から N:hex セグメントを全て抽出して返す
 // 戻り値: { segments: {0: hex, 1: hex, ...}, remainderHex: "後続シングル連結hex" }
 function extractSegments(line) {
+  // ELM327のISO-TP行フォーマット: フレーム0〜9は "N:hex"(コロン付き)だが、
+  // 10以降は "NNhex"(コロン無し・2桁10進+7バイト=16文字) で返すドングルがある。
+  // 両形式をトークン単位で拾い、フレーム番号順に再組立てする。
   const segments = {};
-  // ELM327のISO-TP行番号は16進1〜2桁 (0:〜F:、16行超で10:等)
-  const re = /\b([0-9A-Fa-f]{1,2}):([0-9A-Fa-f]+)/g;
-  let m, lastEnd = 0;
-  while ((m = re.exec(line)) !== null) {
-    segments[parseInt(m[1], 16)] = m[2];
-    lastEnd = m.index + m[0].length;
+  for (const tok of line.trim().split(/\s+/)) {
+    let m;
+    if ((m = tok.match(/^([0-9A-Fa-f]{1,2}):([0-9A-Fa-f]+)$/))) {
+      segments[parseInt(m[1], 16)] = m[2];              // "N:hex"
+    } else if ((m = tok.match(/^(\d\d)([0-9A-Fa-f]{14})$/))) {
+      segments[parseInt(m[1], 10)] = m[2];              // "NN"+7バイト(コロン無し, 10以降)
+    }
+    // それ以外(長さヘッダ "06F" 等)は無視
   }
-  const remainder = line.slice(lastEnd).replace(/\s+/g, '');
-  return { segments, remainder };
+  return { segments, remainder: '' };
 }
 
 // ELM327の1応答ブロック(">"で区切られた単位)をパース
