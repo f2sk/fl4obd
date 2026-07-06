@@ -249,7 +249,7 @@ body.landscape .meter-card {
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260706a</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260706b</span></div>
   <div class="hdr-r">
     <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
@@ -727,8 +727,11 @@ function parseBlock(block) {
     if (/^(SEARCHING|NO DATA|ERROR|UNABLE|BUS)/i.test(line)) continue;
     if (/^[A-Za-z]/.test(line) && !/^[46][0-9A-Fa-f]/i.test(line)) continue;
 
-    // N:hex パターンを含む行（マルチフレーム関連）
-    if (/\b[0-9A-Fa-f]{1,2}:[0-9A-Fa-f]/.test(line)) {
+    // マルチフレーム関連行: "N:hex"(コロン付き 0-9) だけでなく、
+    // このドングルがフレーム10-15を "NN"+7バイト(コロン無し・計16文字) で
+    // 各行単独に返すケースも拾う。拾わないと10-15が捨てられ再組立てが69Bで打ち切られる。
+    if (/\b[0-9A-Fa-f]{1,2}:[0-9A-Fa-f]/.test(line) ||
+        /(^|\s)1[0-5][0-9A-Fa-f]{14}(\s|$)/.test(line)) {
       const { segments, remainder } = extractSegments(line);
       Object.assign(segAll, segments);
       // N:hexの後に続くシングルフレーム連結部分も処理
