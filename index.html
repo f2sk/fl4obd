@@ -270,7 +270,7 @@ body.landscape .meter-card {
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260709b</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260709c</span></div>
   <div class="hdr-r">
     <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
@@ -1143,25 +1143,49 @@ function setUI(s) {
 }
 
 // ─── DEMO ─────────────────────────────────────────────────
-let dRpm = 800, dSpd = 0, dTw = 25, dTcat = 120, dSoc = 78, dSocPhase = 0;
+let dSpd = 0, prevSpd = 0, dSoc = 62, dPhase = 0;
 let demoRunning = false;
 
+// 同定した i-MMD モデルに沿ったデモ:
+// 車速プロファイルから車輪出力を出し、モード(EV/シリーズ/直結/回生)ごとに
+// ENG/GEN/TRC/BAT の各出力を物理整合するよう生成する。※modeは【10進】。
 function demoTick() {
-  dRpm  = Math.max(700,  Math.min(6000, dRpm  + (Math.random() - .45) * 350));
-  dSpd  = Math.max(0,    Math.min(160,  dSpd  + (Math.random() - .45) * 12));
-  dTw   = Math.min(95,   dTw   + .2);
-  dTcat = Math.min(800,  dTcat + (Math.random() - .3) * 15);
-  dSocPhase += 0.15; // 約25秒で全域1往復
-  dSoc = 53.5 + 38.5 * Math.sin(dSocPhase); // 15〜92% をサイン波で往復
-  D.engRot = dRpm;
-  D.vsp    = dSpd;
-  D.soc    = dSoc;
-  D.pbat   = (Math.random() - .4) * 40;                      // ±kW
-  D.peng   = dRpm > 1000 ? (dRpm / 6000) * 90 * (0.6 + Math.random()*0.4) : 0;
-  D.psys   = dSpd * (0.6 + Math.random()*0.9) - (Math.random()<.15 ? 25 : 0); // 走行+時々回生
-  D.runMode = dRpm < 900 ? 0x20 : (dSpd > 70 ? 0x50 : 0x40); // EV/直結/シリーズ
+  dPhase += 0.09;
+  const target = 50 + 48 * Math.sin(dPhase * 0.55);      // 目標車速 2〜98 を緩やかに往復
+  prevSpd = dSpd;
+  dSpd = Math.max(0, dSpd + (target - dSpd) * 0.14);
+  const acc = dSpd - prevSpd;                            // 加速度 [km/h/tick]
+
+  // 車輪(TRC)出力[kW] = 転がり/空気抵抗 + 加速分。減速で負=回生
+  let pdrive = dSpd * 0.18 + acc * 4.5 + (Math.random() - .5) * 1.2;
+  const aux = 1.2;                                        // 補機負荷[kW]
+  let mode, peng = 0, pgen = 0, pbat, rpm;
+
+  if (pdrive < -0.5) {                    // 減速 → 回生 (EV状態)
+    mode = 20; rpm = 0;
+    pbat = pdrive - aux;                  // 負=充電(エネルギー回収)、auxで少し戻す
+  } else if (dSpd < 22) {                 // 低速 → EV
+    mode = 20; rpm = 0;
+    pbat = pdrive / 0.9 + aux;            // 放電(モータ + 補機)
+  } else if (dSpd > 66 && pdrive < 38) {  // 高速定常 → 直結
+    mode = 50;
+    rpm = 23 * dSpd + Math.random() * 80; // 直結の運動学 (eng_rpm ≈ 23×車速)
+    peng = Math.max(pdrive * 0.82, 10);   // エンジンが車輪を機械直結駆動
+    pbat = (pdrive - peng) / 0.9 + aux;   // 不足はモータ補助(放電)/エンジン余剰なら充電
+    pgen = 0;                             // 直結では発電機は遊ぶ
+  } else {                                // 中速/加速 → シリーズ
+    mode = 40;
+    peng = Math.max(pdrive, 6) + 4 + 3 * Math.sin(dPhase * 1.7);  // 需要 + 充電余裕
+    rpm = 1200 + peng * 42 + Math.random() * 120;                 // 発電動作点(車速と非連動)
+    pgen = peng * 0.95;                   // 発電機がエンジン機械出力を吸収(暖機後 ≈ENG)
+    pbat = pdrive - pgen * 0.9 + aux;     // 差分: 発電>需要なら充電(負)
+  }
+
+  dSoc = Math.max(16, Math.min(92, dSoc - pbat * 0.0015));  // SOC は pbat に応じ緩変動
+  D.vsp = dSpd; D.engRot = rpm; D.runMode = mode; D.soc = dSoc;
+  D.peng = peng; D.pgen = pgen; D.pdrive = pdrive; D.pbat = pbat;
+  D.psys = pdrive + (mode === 50 || mode === 70 ? peng : 0);
   systemVolt = 12.4 + Math.random() * .4;
-  // デモ用ランタイム: 初回tickでsync
   if (syncTimeMs === null) { runTimeBase = 0; syncTimeMs = Date.now(); }
 }
 
