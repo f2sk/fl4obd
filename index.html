@@ -91,11 +91,26 @@ body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-he
 /* ── LANDSCAPE MODE: メーターカードだけ90度回転 ─────────── */
 body.landscape .meter-card {
   transform: rotate(90deg);
-}</style>
+}
+
+/* VIEW TABS (ゲージ / フロー) */
+.vtabs{display:flex;gap:5px;margin:2px 0 7px;}
+.vtab{flex:1;padding:7px;background:#0a1520;border:1px solid #1a2a3a;border-radius:7px;
+  color:#2a5a7a;font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;cursor:pointer;transition:all .15s;}
+.vtab.active{border-color:#3a8aff;color:#4a9eff;background:#0d1e30;}
+#flowView{width:100%;overflow:hidden;}
+#flowSvg{display:block;max-width:100%;height:auto;background:#0a1520;border:1px solid #1a2a3a;border-radius:10px;margin-bottom:8px;}</style>
 </head>
 <body>
 <div class="app">
 
+<!-- VIEW TABS: ゲージ / フロー -->
+<div class="vtabs">
+  <button id="tabGauge" class="vtab active" onclick="setView('gauge')">◧ GAUGE</button>
+  <button id="tabFlow"  class="vtab" onclick="setView('flow')">⇄ FLOW</button>
+</div>
+
+<div id="gaugeView">
 <!-- 3x2 ANALOG METERS -->
 <div class="meters-grid">
 
@@ -246,10 +261,16 @@ body.landscape .meter-card {
     <span class="sv" id="txtTime">--:--:--</span>
   </div>
 </div>
+</div><!-- /gaugeView -->
+
+<!-- FLOW VIEW: エネルギーフロー図 (BAT/GEN/ENG/TRC) -->
+<div id="flowView" style="display:none;">
+  <svg id="flowSvg" viewBox="0 0 380 250" width="380" height="250"></svg>
+</div>
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260706b</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260709a</span></div>
   <div class="hdr-r">
     <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
@@ -453,7 +474,15 @@ initCenterMark('centerPwr');
 initCenterMark('centerPsys');
 
 // ─── Vehicle data ─────────────────────────────────────────
-const D = { engRot:0, soc:NaN, pbat:0, vsp:0, psys:0, peng:0, runMode:-1 };
+const D = { engRot:0, soc:NaN, pbat:0, vsp:0, psys:0, peng:0, runMode:-1, pgen:0, pdrive:0 };
+// off90(bit720) = gen_trq(発電機トルク, 生信号)。2920単独で独立に物理換算する。
+// ENG-GEN同軸ゆえ定常の torque balance 比例部分: eng_trq_Nm ≈ gen_trq_Nm。
+// 走行ログ散布図(eng_trq vs gen_trq)の比例係数 |gen_trq|/eng_trq ≈ 0.535 と
+// eng_trqスケール 0.02Nm/LSB から: gen_trqスケール = 0.02/0.535 ≈ 0.0374 Nm/LSB。
+// ※散布図のx切片(≈300LSB)は機械損失(フリクション)。比例部分のみ換算に使い、切片は除外。
+// P_gen[kW] = gen_trq_Nm * eng_rpm * (2π/60)/1000  (同軸: gen_rpm=eng_rpm)。発電時 gen_trq<0 → 符号反転で正。
+const GEN_TRQ_NM = 0.02 / 0.535;                  // ≈0.0374 Nm/LSB
+const GEN_PWR_COEF = GEN_TRQ_NM * (2*Math.PI/60) / 1000;  // ≈3.92e-6  (|gen_trq|*eng_rpm → kW)
 let systemVolt = 0;
 // RunMode コード → ラベル
 // off77 の値は【10進】(20=EV/40=SERIES/50,70=DIRECT/60,30,10=TRANS)。※0x14=20 等
@@ -536,6 +565,91 @@ function render() {
     document.getElementById('txtTime').textContent =
       String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
   }
+
+  if (currentView === 'flow') drawFlow();
+}
+
+// ─── エネルギーフロー図 (BAT/GEN/ENG/TRC + 車輪) ───────────
+let currentView = 'gauge';
+function setView(v){
+  currentView = v;
+  document.getElementById('gaugeView').style.display = (v==='gauge')?'':'none';
+  document.getElementById('flowView').style.display  = (v==='flow') ?'':'none';
+  document.getElementById('tabGauge').classList.toggle('active', v==='gauge');
+  document.getElementById('tabFlow').classList.toggle('active',  v==='flow');
+  if (v==='flow') drawFlow();
+}
+const FNS='http://www.w3.org/2000/svg';
+function fEl(tag,attrs,parent){const e=document.createElementNS(FNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+const FX_M='#ff9a44', FX_E='#00e5ff', FX_R='#25e0a0';  // 機械/電気/回生
+const fEX=18,fEY=28, fTX=284,fTY=28, fGX=18,fGY=182, fBX=284,fBY=182, fWX=190,fWY=50, fJX=323,fJY=128, fBEND=248;
+function fDefs(svg){
+  const d=fEl('defs',{},svg);
+  for(const [id,c] of [['fah_mech',FX_M],['fah_elec',FX_E],['fah_regen',FX_R]]){
+    const m=fEl('marker',{id,markerWidth:2.6,markerHeight:2.4,refX:2.3,refY:1.2,orient:'auto',markerUnits:'strokeWidth'},d);
+    fEl('path',{d:'M0 0 L2.6 1.2 L0 2.4 Z',fill:c},m);
+  }
+}
+function fArrow(svg,pts,kind,active,kw,lx,ly,regen){
+  const color = regen ? FX_R : (kind==='mech'?FX_M:FX_E);
+  const mk = regen ? 'fah_regen' : 'fah_'+kind;
+  const mag = (kw!=null)?Math.abs(kw):0;
+  const w = active ? Math.max(3.2, Math.min(2.2+mag*0.17,13)) : 2.4;
+  const d = pts.map((p,i)=>(i?'L':'M')+p[0]+' '+p[1]).join(' ');
+  fEl('path',{d,fill:'none',stroke:color,'stroke-width':w,'stroke-linecap':'round','stroke-linejoin':'round','marker-end':'url(#'+mk+')',opacity:active?1:0.16},svg);
+  if(kw!=null){const t=fEl('text',{x:lx,y:ly,'text-anchor':'middle','font-size':16,'font-weight':'bold','font-family':'Courier New',fill:color,opacity:active?1:0.16},svg);t.textContent=kw.toFixed(1);}
+}
+function fNode(svg,x,y,label,sub,on,hot){
+  const g=fEl('g',{opacity:on?1:0.5},svg);
+  fEl('rect',{x,y,width:78,height:44,rx:6,fill:'#111a24',stroke:on?'#4a6a80':'#2a3a4a','stroke-width':1.5},g);
+  const t=fEl('text',{x:x+39,y:y+(hot?20:24),'text-anchor':'middle','font-size':15,'font-weight':'bold','font-family':'Courier New',fill:'#dfefff'},g);t.textContent=label;
+  const s=fEl('text',{x:x+39,y:y+36,'text-anchor':'middle','font-size':hot?12:8,'font-family':'Courier New','font-weight':hot?'bold':'normal',fill:hot?'#9fe8ff':'#5a7a90'},g);s.textContent=sub;
+}
+function fWheel(svg,x,y,on,spd){
+  const g=fEl('g',{opacity:on?1:0.5},svg);
+  fEl('circle',{cx:x,cy:y,r:15,fill:'none',stroke:'#889','stroke-width':3},g);
+  fEl('circle',{cx:x,cy:y,r:4,fill:'#889'},g);
+  const t=fEl('text',{x,y:y+29,'text-anchor':'middle','font-size':9,fill:'#889'},g);t.textContent='車輪';
+  if(spd!=null&&!isNaN(spd)){const v=fEl('text',{x,y:y+43,'text-anchor':'middle','font-size':12,'font-weight':'bold','font-family':'Courier New',fill:'#9fe8ff'},svg);v.textContent=Math.round(spd)+' km/h';}
+}
+function drawFlow(){
+  const svg=document.getElementById('flowSvg');
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  fDefs(svg);
+  const mode=D.runMode;
+  const modeLabel=(mode>=0&&MODE_LABELS[mode])?MODE_LABELS[mode]:'--';
+  const isDirect=(mode===50||mode===70), isSeries=(mode===40);
+  const peng=D.peng||0, pgen=D.pgen||0, pbat=D.pbat||0, pdrive=D.pdrive||0;
+  const regen = pdrive < -0.1;                 // 車輪出力が負=回生
+  const on=(v)=>Math.abs(v)>0.1;
+  let engWheel=0, trcWheel, busTrc, engGen=0, genBus=0;
+  if(regen){ trcWheel=-pdrive; busTrc=-pdrive; }
+  else if(isDirect){ engWheel=peng; trcWheel=Math.max(0,pdrive-peng); busTrc=trcWheel; }
+  else { trcWheel=pdrive; busTrc=pdrive; if(isSeries){ engGen=peng; genBus=Math.abs(pgen);} }
+  const batBus=-pbat;                           // +:充電(bus→BAT) / -:放電(BAT→bus)
+  // 機械(橙): ENG直結→車輪 / TRC→車輪 / ENG-GEN軸
+  fArrow(svg,[[fEX+78,fWY],[fWX-17,fWY]],'mech',on(engWheel),on(engWheel)?engWheel:null,134,fWY-19);
+  if(regen) fArrow(svg,[[fWX+17,fWY],[fTX,fWY]],'mech',on(trcWheel),on(trcWheel)?trcWheel:null,247,fWY-19,true);
+  else      fArrow(svg,[[fTX,fWY],[fWX+17,fWY]],'mech',on(trcWheel),on(trcWheel)?trcWheel:null,247,fWY-19,false);
+  fArrow(svg,[[fEX+39,fEY+44],[fEX+39,fGY]],'mech',on(engGen),on(engGen)?engGen:null,fEX+70,132);
+  // 電気(シアン): GEN→bus(右→中央上→junction) / junction↔TRC / BAT↔junction
+  fArrow(svg,[[fGX+78,204],[fBEND,204],[fBEND,fJY],[fJX-10,fJY]],'elec',on(genBus),on(genBus)?genBus:null,168,196);
+  if(regen) fArrow(svg,[[fJX,fTY+44],[fJX,fJY-9]],'elec',on(busTrc),on(busTrc)?busTrc:null,fJX-31,96,true);
+  else      fArrow(svg,[[fJX,fJY-9],[fJX,fTY+44]],'elec',on(busTrc),on(busTrc)?busTrc:null,fJX-31,96,false);
+  if(batBus>=0) fArrow(svg,[[fJX,fJY+9],[fJX,fBY]],'elec',on(batBus),on(batBus)?batBus:null,fJX-31,163,regen);
+  else          fArrow(svg,[[fJX,fBY],[fJX,fJY+9]],'elec',on(batBus),on(batBus)?-batBus:null,fJX-31,163,false);
+  fEl('circle',{cx:fJX,cy:fJY,r:7,fill:'#0a0e14',stroke:FX_E,'stroke-width':2},svg);
+  fEl('circle',{cx:fJX,cy:fJY,r:2.5,fill:FX_E},svg);
+  // ノード
+  fNode(svg,fEX,fEY,'ENG',(Math.round(D.engRot)||0)+' rpm',on(peng),true);
+  fNode(svg,fTX,fTY,'TRC','P_mot',on(pdrive));
+  fNode(svg,fGX,fGY,'GEN','P_gen',isSeries&&on(pgen));
+  fNode(svg,fBX,fBY,'BAT',isNaN(D.soc)?'SOC --':'SOC '+D.soc.toFixed(0)+'%',true,true);
+  fWheel(svg,fWX,fWY,on(trcWheel)||on(engWheel),D.vsp);
+  // 中央 MODE (EV/SERIES=水色, DIRECT=橙)
+  const mc={EV:FX_E,SERIES:FX_E,DIRECT:FX_M}[modeLabel]||'#cfe';
+  const mt=fEl('text',{x:186,y:154,'text-anchor':'middle','font-size':32,'font-weight':'bold','font-family':'Courier New',fill:mc},svg);mt.textContent=modeLabel;
+  const mcap=fEl('text',{x:186,y:123,'text-anchor':'middle','font-size':10,'font-family':'Courier New',fill:'#5a7a90','letter-spacing':3},svg);mcap.textContent='MODE';
 }
 
 // ─── ELM327 レスポンスパーサー ────────────────────────────
@@ -632,14 +746,17 @@ function parse22_2920(hex) {
   const pbat   = s16(86)  * 0.0100;  // batt_pwr 2920(672,16,BE,s) → byte84
   const engTrq = s16(96);            // eng_trq  2920(752,16,BE,s) → byte94
   const drvTrq = s16(90);            // drv_trq3 2920(704,16,BE,s) → byte88
+  const genTrq = s16(92);            // gen_trq  2920(720,16,BE,s) → byte90 ※torque(発電時<0)
   const mode   = u8(79);             // mode     2920(616, 8,flag) → byte77 ※値は10進(20/40/50…)
   D.vsp     = vsp;
   D.engRot  = engRpm;
   D.pbat    = pbat;
   D.runMode = mode;
   D.peng = 2.09e-6 * engTrq * engRpm;                 // エンジン機械出力 [kW]
+  D.pgen = GEN_PWR_COEF * (-genTrq) * engRpm;         // 発電機出力 [kW] (発電=正, 2920単独)
+  D.pdrive = 0.000147 * drvTrq * vsp;                 // 車輪(TRC)出力 [kW]
   const isDirect = (mode === 50 || mode === 70);      // 直結のみエンジン分を加算(10進)
-  D.psys = 0.000147 * drvTrq * vsp + (isDirect ? D.peng : 0);
+  D.psys = D.pdrive + (isDirect ? D.peng : 0);
   dataUpdated = true;
 }
 
