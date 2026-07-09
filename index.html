@@ -270,7 +270,7 @@ body.landscape .meter-card {
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260709g</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260710a</span></div>
   <div class="hdr-r">
     <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
@@ -636,7 +636,8 @@ function drawFlow(){
   const genGen = pgen > 0.1;              // GEN発電 (ENG→GEN→bus)
   const genMot = pgen < -0.1;             // GEN力行 (bus→GEN→ENG): エンブレ廃電 or 始動クランキング
   const genMag = Math.abs(pgen);
-  const dump = regen && genMot;           // エンブレ廃電: SOCフル時、回生電力をGENでエンジンを回し熱で捨てる
+  // エンブレ廃電: 回生中にGEN力行 かつ SOC高(満充電が条件)。始動クランキング(非回生/低〜中SOC)と区別
+  const dump = regen && genMot && D.soc >= 85;
   // フロー算出 + AUX(電気バス収支の残差 = 補機/DC-DC/AC)
   let trcWheel, busTrc;
   const engWheel = isDirect ? peng : 0;   // ENG機械直結→車輪(直結時)
