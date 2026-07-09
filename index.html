@@ -270,7 +270,7 @@ body.landscape .meter-card {
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260709d</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260709e</span></div>
   <div class="hdr-r">
     <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
@@ -642,7 +642,7 @@ function drawFlow(){
   fEl('circle',{cx:fJX,cy:fJY,r:2.5,fill:FX_E},svg);
   // ノード
   fNode(svg,fEX,fEY,'ENG',(Math.round(D.engRot)||0)+' rpm',on(peng),true);
-  fNode(svg,fTX,fTY,'TRC','P_mot',on(pdrive));
+  fNode(svg,fTX,fTY,'MOT','P_mot',on(pdrive));
   fNode(svg,fGX,fGY,'GEN','P_gen',isSeries&&on(pgen));
   fNode(svg,fBX,fBY,'BAT',isNaN(D.soc)?'SOC --':'SOC '+D.soc.toFixed(0)+'%',true,true);
   fWheel(svg,fWX,fWY,on(trcWheel)||on(engWheel),D.vsp);
