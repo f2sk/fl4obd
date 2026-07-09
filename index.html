@@ -270,7 +270,7 @@ body.landscape .meter-card {
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260709f</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260709g</span></div>
   <div class="hdr-r">
     <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
@@ -633,20 +633,29 @@ function drawFlow(){
   const peng=D.peng||0, pgen=D.pgen||0, pbat=D.pbat||0, pdrive=D.pdrive||0;
   const regen = pdrive < -0.1;
   const on=(v)=>Math.abs(v)>0.1;
+  const genGen = pgen > 0.1;              // GEN発電 (ENG→GEN→bus)
+  const genMot = pgen < -0.1;             // GEN力行 (bus→GEN→ENG): エンブレ廃電 or 始動クランキング
+  const genMag = Math.abs(pgen);
+  const dump = regen && genMot;           // エンブレ廃電: SOCフル時、回生電力をGENでエンジンを回し熱で捨てる
   // フロー算出 + AUX(電気バス収支の残差 = 補機/DC-DC/AC)
-  let engWheel=0, trcWheel, busTrc, engGen=0, genBus=0, aux;
-  if(regen){ trcWheel=-pdrive; busTrc=-pdrive; aux=pbat-pdrive; }
-  else if(isDirect){ engWheel=peng; trcWheel=Math.max(0,pdrive-peng); busTrc=trcWheel; aux=pbat-busTrc; }
-  else if(isSeries){ trcWheel=pdrive; busTrc=pdrive; engGen=peng; genBus=Math.abs(pgen); aux=genBus+pbat-pdrive; }
-  else { trcWheel=pdrive; busTrc=pdrive; aux=pbat-pdrive; }   // EV力行
-  aux=Math.max(0,aux);
+  let trcWheel, busTrc;
+  const engWheel = isDirect ? peng : 0;   // ENG機械直結→車輪(直結時)
+  if(regen)        { trcWheel=-pdrive; busTrc=-pdrive; }
+  else if(isDirect){ trcWheel=Math.max(0,pdrive-peng); busTrc=trcWheel; }
+  else             { trcWheel=pdrive; busTrc=pdrive; }
+  const engGen = genGen ? peng : genMag;  // ENG-GEN軸の機械電力
+  const genBus = genMag;                  // GEN-bus 電気
+  // 電気バス収支(into-bus正): MOT(回生+/力行-)+GEN(発電+/力行-)+BAT(放電+/充電-) = AUX(常out)
+  const aux = Math.max(0, (regen?busTrc:-busTrc) + (genGen?genMag:(genMot?-genMag:0)) + pbat);
   const batBus=-pbat;   // +:充電(bus→BAT) / -:放電(BAT→bus)
-  // 機械(橙): ENG直結→車輪(上→右) / MOT→車輪(縦) / ENG→GEN(左縦)
+  // 機械(橙): ENG直結→車輪(上→右) / MOT→車輪(縦) / ENG↔GEN軸(発電=ENG→GEN / 力行=GEN→ENG)
   fArrow(svg,[[fEX+fBW/2,fEY],[fEX+fBW/2,fWY],[fWX-24,fWY]],'mech',on(engWheel),on(engWheel)?engWheel:null,128,140);
   fArrow(svg,[[fTX+fBW/2,fTY],[fTX+fBW/2,fWY+24]],'mech',on(trcWheel),on(trcWheel)?trcWheel:null,286,140,regen?FX_R:FX_M,'end');
-  fArrow(svg,[[fEX+fBW/2,fEY+fBH],[fEX+fBW/2,fGY]],'mech',on(engGen),on(engGen)?engGen:null,128,326);
-  // 電気: GEN→bus(左) / bus↔MOT(上) / BAT↔bus(下) / bus→AUX(右)
-  fArrow(svg,[[fGX+fBW,fGY+fBH/2],[fJX-9,fJY]],'elec',on(genBus),on(genBus)?genBus:null,132,378);
+  if(genMot) fArrow(svg,[[fEX+fBW/2,fGY],[fEX+fBW/2,fEY+fBH]],'mech',on(engGen),on(engGen)?engGen:null,128,326,dump?FX_R:FX_M); // GEN→ENG(上)
+  else       fArrow(svg,[[fEX+fBW/2,fEY+fBH],[fEX+fBW/2,fGY]],'mech',on(engGen),on(engGen)?engGen:null,128,326);               // ENG→GEN(下)
+  // 電気: GEN↔bus(発電=GEN→bus / 力行=bus→GEN) / bus↔MOT(上) / BAT↔bus(下) / bus→AUX(右)
+  if(genMot) fArrow(svg,[[fJX-9,fJY],[fGX+fBW,fGY+fBH/2]],'elec',on(genBus),on(genBus)?genBus:null,132,378,dump?FX_R:null); // bus→GEN(左)
+  else       fArrow(svg,[[fGX+fBW,fGY+fBH/2],[fJX-9,fJY]],'elec',on(genBus),on(genBus)?genBus:null,132,378);               // GEN→bus(右)
   if(regen) fArrow(svg,[[fJX,fTY+fBH],[fJX,fJY-9]],'elec',on(busTrc),on(busTrc)?busTrc:null,286,326,FX_R,'end');
   else      fArrow(svg,[[fJX,fJY-9],[fJX,fTY+fBH]],'elec',on(busTrc),on(busTrc)?busTrc:null,286,326,null,'end');
   if(batBus>=0) fArrow(svg,[[fJX,fJY+9],[fBX+fBW/2,fBY]],'elec',on(batBus),on(batBus)?batBus:null,286,470,regen?FX_R:FX_E,'end');
@@ -655,9 +664,10 @@ function drawFlow(){
   fEl('circle',{cx:fJX,cy:fJY,r:8,fill:'#0a0e14',stroke:FX_E,'stroke-width':2.5},svg);
   fEl('circle',{cx:fJX,cy:fJY,r:3,fill:FX_E},svg);
   // ノード
-  fNode(svg,fEX,fEY,'ENG',(Math.round(D.engRot)||0)+' rpm',on(peng),true);
+  fNode(svg,fEX,fEY,'ENG',(Math.round(D.engRot)||0)+' rpm',on(peng)||genMot,true);
   fNode(svg,fTX,fTY,'MOT','P_mot',on(pdrive));
-  fNode(svg,fGX,fGY,'GEN','P_gen',isSeries&&on(pgen));
+  fNode(svg,fGX,fGY,'GEN','P_gen',on(pgen));
+  if(dump) fEl('text',{x:fEX+fBW/2,y:fEY-8,'text-anchor':'middle','font-size':14,'font-weight':'bold','font-family':'Courier New',fill:'#ff5544'},svg).textContent='廃電';
   fNode(svg,fBX,fBY,'BAT',isNaN(D.soc)?'SOC --':'SOC '+D.soc.toFixed(0)+'%',true,true);
   fNode(svg,fAX,fAY,'AUX/AC',on(aux)?aux.toFixed(1)+'kW':'--',on(aux),true,FX_A);
   fWheel(svg,fWX,fWY,on(trcWheel)||on(engWheel),D.vsp);
