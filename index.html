@@ -636,7 +636,8 @@ function drawFlow(){
   const genGen = pgen > 0.1;              // GEN発電 (ENG→GEN→bus)
   const genMot = pgen < -0.1;             // GEN力行 (bus→GEN→ENG): エンブレ廃電 or 始動クランキング
   const genMag = Math.abs(pgen);
-  // エンブレ廃電: 回生中にGEN力行 かつ SOC高(満充電が条件)。始動クランキング(非回生/低〜中SOC)と区別
+  // エンブレ廃電: 回生中のGEN力行(genMot)が本質トリガー。実際の廃電開始は SOC≈94.5%〜。
+  // SOC>=85 は「それ未満では回生中にGEN力行しない(普通に充電)」ための緩いガード=クランキング誤爆防止。
   const dump = regen && genMot && D.soc >= 85;
   // フロー算出 + AUX(電気バス収支の残差 = 補機/DC-DC/AC)
   let trcWheel, busTrc;
