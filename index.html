@@ -270,7 +270,7 @@ body.landscape .meter-card {
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260709c</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260709d</span></div>
   <div class="hdr-r">
     <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
@@ -1163,7 +1163,7 @@ function demoTick() {
 
   if (pdrive < -0.5) {                    // 減速 → 回生 (EV状態)
     mode = 20; rpm = 0;
-    pbat = pdrive - aux;                  // 負=充電(エネルギー回収)、auxで少し戻す
+    pbat = pdrive + aux;                  // 充電=|回生|−補機消費 (負=充電)。BAT流入≤回生で保存
   } else if (dSpd < 22) {                 // 低速 → EV
     mode = 20; rpm = 0;
     pbat = pdrive / 0.9 + aux;            // 放電(モータ + 補機)
