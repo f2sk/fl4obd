@@ -270,7 +270,7 @@ body.landscape .meter-card {
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260710b</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260710c</span></div>
   <div class="hdr-r">
     <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
@@ -584,7 +584,7 @@ const FNS='http://www.w3.org/2000/svg';
 function fEl(tag,attrs,parent){const e=document.createElementNS(FNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
 const FX_M='#ff9a44', FX_E='#00e5ff', FX_R='#25e0a0', FX_A='#c9a0ff';  // 機械/電気/回生/補機
 // 縦長 viewBox 380x600。中央スパイン 車輪→MOT→bus→BAT, 左 ENG/GEN, 右 AUX/AC
-const fWX=190,fWY=58, fEX=20,fEY=185, fTX=142,fTY=185, fGX=20,fGY=390, fJX=190,fJY=417, fBX=142,fBY=512, fAX=264,fAY=390, fBW=96,fBH=56;
+const fWX=190,fWY=58, fEX=20,fEY=185, fTX=142,fTY=185, fGX=20,fGY=390, fJX=190,fJY=418, fBX=142,fBY=512, fAX=264,fAY=390, fBW=96,fBH=56;
 function fDefs(svg){
   const d=fEl('defs',{},svg);
   for(const [id,c] of [['fah_mech',FX_M],['fah_elec',FX_E],['fah_regen',FX_R],['fah_aux',FX_A]]){
