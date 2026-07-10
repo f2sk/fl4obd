@@ -110,6 +110,42 @@
       transition: opacity 0.15s;
     }
     .toggle-btn.off { opacity: 0.3; }
+
+    /* Tabs */
+    #tabBar { display: flex; gap: 8px; margin-bottom: 12px; }
+    .tab-btn {
+      flex: 1; padding: 9px 0; font-size: 0.8rem; letter-spacing: 1.5px;
+      color: var(--muted); background: transparent;
+      border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+    }
+    .tab-btn.active { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: bold; }
+    .tab-btn:disabled { opacity: 0.3; cursor: default; }
+    .hint { font-size: 0.7rem; color: var(--muted); margin-bottom: 10px; text-align: center; }
+
+    /* Flow playback */
+    #flowSvg {
+      display: block; width: 100%; max-width: 340px; height: auto;
+      margin: 4px auto 0; background: #0a1520; border-radius: 10px;
+    }
+    .flow-ctrl {
+      display: flex; align-items: center; gap: 10px;
+      margin: 0 auto; max-width: 340px;
+      position: sticky; top: 0; z-index: 5;
+      background: var(--card); padding: 8px 0;
+    }
+    .flow-ctrl button {
+      font-size: 1rem; width: 42px; height: 34px; flex: 0 0 auto;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--accent); border-radius: 6px; cursor: pointer;
+    }
+    .flow-ctrl button:hover { border-color: var(--accent); }
+    .flow-ctrl input[type=range] { flex: 1; accent-color: var(--accent); min-width: 0; }
+    .flow-ctrl select {
+      flex: 0 0 auto; background: var(--card); color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 5px 6px; font-size: 0.78rem; cursor: pointer;
+    }
+    #flowStat { font-size: 0.7rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   </style>
 </head>
 <body>
@@ -130,41 +166,308 @@
 <div id="charts">
   <div id="fileInfo"></div>
 
-  <div class="chart-card" id="cardVehicle">
-    <div class="chart-header">
-      <span class="chart-title">VEHICLE</span>
-      <div class="chart-toggles" id="togVehicle"></div>
-    </div>
-    <canvas id="cVehicle"></canvas>
+  <div id="tabBar">
+    <button class="tab-btn active" data-tab="graphs">GRAPHS</button>
+    <button class="tab-btn" data-tab="flow" id="tabBtnFlow">FLOW</button>
   </div>
 
-  <div class="chart-card" id="cardBattery">
-    <div class="chart-header">
-      <span class="chart-title">BATTERY</span>
-      <div class="chart-toggles" id="togBattery"></div>
+  <!-- FLOW タブ -->
+  <div id="tabFlow" class="tab-pane" style="display:none">
+    <div class="chart-card" id="cardFlow">
+      <div class="chart-header">
+        <span class="chart-title">FLOW PLAYBACK</span>
+        <span id="flowStat"></span>
+      </div>
+      <div class="flow-ctrl">
+        <button id="flowPlay" title="再生/一時停止">▶</button>
+        <input type="range" id="flowSeek" min="0" max="100" value="0" step="0.001">
+        <select id="flowSpeed" title="再生速度">
+          <option value="0.25">0.25×</option>
+          <option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option>
+          <option value="2">2×</option>
+          <option value="4">4×</option>
+          <option value="8">8×</option>
+          <option value="16">16×</option>
+        </select>
+      </div>
+      <svg id="flowSvg" viewBox="0 0 380 600"></svg>
     </div>
-    <canvas id="cBattery"></canvas>
   </div>
 
-  <div class="chart-card" id="cardTemp" style="display:none">
-    <div class="chart-header">
-      <span class="chart-title">TEMPERATURE</span>
-      <div class="chart-toggles" id="togTemp"></div>
-    </div>
-    <canvas id="cTemp"></canvas>
-  </div>
+  <!-- GRAPHS タブ -->
+  <div id="tabGraphs" class="tab-pane">
+    <p class="hint" id="scrubHint">▸ グラフをドラッグすると、その時刻へ FLOW が同期します</p>
 
-  <div class="chart-card" id="cardSysv" style="display:none">
-    <div class="chart-header">
-      <span class="chart-title">SYSTEM VOLTAGE (12V)</span>
-      <div class="chart-toggles" id="togSysv"></div>
+    <div class="chart-card" id="cardVehicle">
+      <div class="chart-header">
+        <span class="chart-title">VEHICLE</span>
+        <div class="chart-toggles" id="togVehicle"></div>
+      </div>
+      <canvas id="cVehicle"></canvas>
     </div>
-    <canvas id="cSysv"></canvas>
+
+    <div class="chart-card" id="cardBattery">
+      <div class="chart-header">
+        <span class="chart-title">BATTERY</span>
+        <div class="chart-toggles" id="togBattery"></div>
+      </div>
+      <canvas id="cBattery"></canvas>
+    </div>
+
+    <div class="chart-card" id="cardPower" style="display:none">
+      <div class="chart-header">
+        <span class="chart-title">POWER (2920)</span>
+        <div class="chart-toggles" id="togPower"></div>
+      </div>
+      <canvas id="cPower"></canvas>
+    </div>
+
+    <div class="chart-card" id="cardTemp" style="display:none">
+      <div class="chart-header">
+        <span class="chart-title">TEMPERATURE</span>
+        <div class="chart-toggles" id="togTemp"></div>
+      </div>
+      <canvas id="cTemp"></canvas>
+    </div>
+
+    <div class="chart-card" id="cardSysv" style="display:none">
+      <div class="chart-header">
+        <span class="chart-title">SYSTEM VOLTAGE (12V)</span>
+        <div class="chart-toggles" id="togSysv"></div>
+      </div>
+      <canvas id="cSysv"></canvas>
+    </div>
   </div>
 </div>
 
 <script>
 const charts = {};
+
+/* ══ フロー再生（index.html のフロー図を移植）════════════════════ */
+const D = {};
+const MODE_LABELS = { 20:'EV', 40:'SERIES', 50:'DIRECT', 70:'DIRECT', 60:'TRANS', 30:'TRANS', 10:'TRANS' };
+const GEN_TRQ_NM = 0.02 / 0.535;
+const GEN_PWR_COEF = GEN_TRQ_NM * (2*Math.PI/60) / 1000;
+const FNS = 'http://www.w3.org/2000/svg';
+function fEl(tag,attrs,parent){const e=document.createElementNS(FNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+const FX_M='#ff9a44', FX_E='#00e5ff', FX_R='#25e0a0', FX_A='#c9a0ff';
+const fWX=190,fWY=58, fEX=20,fEY=185, fTX=142,fTY=185, fGX=20,fGY=390, fJX=190,fJY=418, fBX=142,fBY=512, fAX=264,fAY=390, fBW=96,fBH=56;
+function fDefs(svg){
+  const d=fEl('defs',{},svg);
+  for(const [id,c] of [['fah_mech',FX_M],['fah_elec',FX_E],['fah_regen',FX_R],['fah_aux',FX_A]]){
+    const m=fEl('marker',{id,markerWidth:2.6,markerHeight:2.4,refX:2.3,refY:1.2,orient:'auto',markerUnits:'strokeWidth'},d);
+    fEl('path',{d:'M0 0 L2.6 1.2 L0 2.4 Z',fill:c},m);
+  }
+}
+function fArrow(svg,pts,kind,active,kw,lx,ly,col,anchor){
+  const color = col || (kind==='mech'?FX_M:kind==='elec'?FX_E:kind==='aux'?FX_A:FX_R);
+  const mk = {[FX_M]:'fah_mech',[FX_E]:'fah_elec',[FX_R]:'fah_regen',[FX_A]:'fah_aux'}[color]||'fah_elec';
+  const mag = (kw!=null)?Math.abs(kw):0;
+  const w = active ? Math.max(3.6, Math.min(2.4+mag*0.18,15)) : 2.6;
+  const d = pts.map((p,i)=>(i?'L':'M')+p[0]+' '+p[1]).join(' ');
+  fEl('path',{d,fill:'none',stroke:color,'stroke-width':w,'stroke-linecap':'round','stroke-linejoin':'round','marker-end':'url(#'+mk+')',opacity:active?1:0.15},svg);
+  if(kw!=null){const t=fEl('text',{x:lx,y:ly,'text-anchor':anchor||'middle','font-size':28,'font-weight':'bold','font-family':'Courier New',fill:color,opacity:active?1:0.15},svg);t.textContent=kw.toFixed(1);}
+}
+function fNode(svg,x,y,label,sub,on,hot,subcol){
+  const g=fEl('g',{opacity:on?1:0.45},svg);
+  fEl('rect',{x,y,width:fBW,height:fBH,rx:7,fill:'#111a24',stroke:on?'#4a6a80':'#2a3a4a','stroke-width':1.6},g);
+  fEl('text',{x:x+fBW/2,y:y+(hot?24:31),'text-anchor':'middle','font-size':19,'font-weight':'bold','font-family':'Courier New',fill:'#dfefff'},g).textContent=label;
+  fEl('text',{x:x+fBW/2,y:y+46,'text-anchor':'middle','font-size':hot?19:10,'font-family':'Courier New','font-weight':hot?'bold':'normal',fill:hot?(subcol||'#9fe8ff'):'#5a7a90'},g).textContent=sub;
+}
+function fWheel(svg,x,y,on,spd){
+  const g=fEl('g',{opacity:on?1:0.45},svg);
+  fEl('circle',{cx:x,cy:y,r:20,fill:'none',stroke:'#889','stroke-width':3.5},g);
+  fEl('circle',{cx:x,cy:y,r:5,fill:'#889'},g);
+  fEl('text',{x:x-32,y:y+6,'text-anchor':'end','font-size':11,fill:'#889'},g).textContent='車輪';
+  if(spd!=null&&!isNaN(spd)){fEl('text',{x:x+30,y:y+8,'text-anchor':'start','font-size':24,'font-weight':'bold','font-family':'Courier New',fill:'#9fe8ff'},svg).textContent=Math.round(spd)+' km/h';}
+}
+let stableMode = -1;
+function updateStableMode(m){
+  if(m===20||m===40||m===50||m===70) stableMode=m;
+  else if(m===10 && stableMode===20) stableMode=40;
+  else if(m===30 && (stableMode===40||stableMode===50||stableMode===70)) stableMode=20;
+  return stableMode;
+}
+function drawFlow(){
+  const svg=document.getElementById('flowSvg');
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  fDefs(svg);
+  const mode=(D.dispMode>=0)?D.dispMode:D.runMode;
+  const modeLabel=(mode>=0&&MODE_LABELS[mode])?MODE_LABELS[mode]:'--';
+  const isDirect=(mode===50||mode===70), isSeries=(mode===40);
+  const peng=D.peng||0, pgen=D.pgen||0, pbat=D.pbat||0, pdrive=D.pdrive||0;
+  const regen = pdrive < -0.1;
+  const on=(v)=>Math.abs(v)>0.1;
+  const genGen = pgen > 0.1;
+  const genMot = pgen < -0.1;
+  const genMag = Math.abs(pgen);
+  const dump = regen && genMot && D.soc >= 85;
+  let trcWheel, busTrc;
+  const engWheel = isDirect ? peng : 0;
+  if(regen)        { trcWheel=-pdrive; busTrc=-pdrive; }
+  else if(isDirect){ trcWheel=Math.max(0,pdrive-peng); busTrc=trcWheel; }
+  else             { trcWheel=pdrive; busTrc=pdrive; }
+  const engGen = genGen ? peng : genMag;
+  const genBus = genMag;
+  const aux = Math.max(0, (regen?busTrc:-busTrc) + (genGen?genMag:(genMot?-genMag:0)) + pbat);
+  const batBus=-pbat;
+  fArrow(svg,[[fEX+fBW/2,fEY],[fEX+fBW/2,fWY],[fWX-24,fWY]],'mech',on(engWheel),on(engWheel)?engWheel:null,128,140);
+  if(regen) fArrow(svg,[[fTX+fBW/2,fWY+24],[fTX+fBW/2,fTY]],'mech',on(trcWheel),on(trcWheel)?trcWheel:null,286,140,FX_R,'end');
+  else      fArrow(svg,[[fTX+fBW/2,fTY],[fTX+fBW/2,fWY+24]],'mech',on(trcWheel),on(trcWheel)?trcWheel:null,286,140,FX_M,'end');
+  if(genMot) fArrow(svg,[[fEX+fBW/2,fGY],[fEX+fBW/2,fEY+fBH]],'mech',on(engGen),on(engGen)?engGen:null,128,326,dump?FX_R:FX_M);
+  else       fArrow(svg,[[fEX+fBW/2,fEY+fBH],[fEX+fBW/2,fGY]],'mech',on(engGen),on(engGen)?engGen:null,128,326);
+  if(genMot) fArrow(svg,[[fJX-9,fJY],[fGX+fBW,fGY+fBH/2]],'elec',on(genBus),on(genBus)?genBus:null,132,378,dump?FX_R:null);
+  else       fArrow(svg,[[fGX+fBW,fGY+fBH/2],[fJX-9,fJY]],'elec',on(genBus),on(genBus)?genBus:null,132,378);
+  if(regen) fArrow(svg,[[fJX,fTY+fBH],[fJX,fJY-9]],'elec',on(busTrc),on(busTrc)?busTrc:null,286,326,FX_R,'end');
+  else      fArrow(svg,[[fJX,fJY-9],[fJX,fTY+fBH]],'elec',on(busTrc),on(busTrc)?busTrc:null,286,326,null,'end');
+  if(batBus>=0) fArrow(svg,[[fJX,fJY+9],[fBX+fBW/2,fBY]],'elec',on(batBus),on(batBus)?batBus:null,286,470,regen?FX_R:FX_E,'end');
+  else          fArrow(svg,[[fBX+fBW/2,fBY],[fJX,fJY+9]],'elec',on(batBus),on(batBus)?-batBus:null,286,470,null,'end');
+  fArrow(svg,[[fJX+9,fJY],[fAX,fAY+fBH/2]],'aux',on(aux),on(aux)?aux:null,286,378,null,'end');
+  fEl('circle',{cx:fJX,cy:fJY,r:8,fill:'#0a0e14',stroke:FX_E,'stroke-width':2.5},svg);
+  fEl('circle',{cx:fJX,cy:fJY,r:3,fill:FX_E},svg);
+  fNode(svg,fEX,fEY,'ENG',(Math.round(D.engRot)||0)+' rpm',on(peng)||genMot,true);
+  fNode(svg,fTX,fTY,'MOT','P_mot',on(pdrive));
+  fNode(svg,fGX,fGY,'GEN','P_gen',on(pgen));
+  if(dump) fEl('text',{x:fEX+fBW/2,y:fEY-8,'text-anchor':'middle','font-size':14,'font-weight':'bold','font-family':'Courier New',fill:'#ff5544'},svg).textContent='廃電';
+  fNode(svg,fBX,fBY,'BAT',isNaN(D.soc)?'SOC --':'SOC '+D.soc.toFixed(0)+'%',true,true);
+  fNode(svg,fAX,fAY,'AUX/AC',on(aux)?aux.toFixed(1)+'kW':'--',on(aux),true,FX_A);
+  fWheel(svg,fWX,fWY,on(trcWheel)||on(engWheel),D.vsp);
+  const mc={EV:FX_E,SERIES:FX_E,DIRECT:FX_M}[modeLabel]||'#cfe';
+  fEl('text',{x:312,y:fEY+8,'text-anchor':'middle','font-size':12,'font-family':'Courier New',fill:'#5a7a90','letter-spacing':2},svg).textContent='MODE';
+  fEl('text',{x:312,y:fEY+38,'text-anchor':'middle','font-size':26,'font-weight':'bold','font-family':'Courier New',fill:mc},svg).textContent=modeLabel;
+}
+
+/* ── 2920 マルチフレーム再構成 + フィールド算出 ───────────── */
+// ログ行の受信部 "0:6229.. 1:.. .. 1563.." を結合(10-15はコロン無し)
+function reassemble2920(rxRaw){
+  const frames={};
+  for(const tok of rxRaw.trim().split(/\s+/)){
+    let m;
+    if((m=tok.match(/^(\d):([0-9A-F]+)$/i)))            frames[+m[1]]=m[2];
+    else if((m=tok.match(/^(1[0-5])([0-9A-F]{14})$/i))) frames[+m[1]]=m[2];
+  }
+  let full=''; for(let i=0;i<=15;i++) if(frames[i]!==undefined) full+=frames[i];
+  return full;
+}
+function compute2920(full){
+  if(full.length < 204) return null;
+  const u16=i=>parseInt(full.substr(i*2,4),16);
+  const s16=i=>{const v=u16(i);return v>=0x8000?v-0x10000:v;};
+  const u8 =i=>parseInt(full.substr(i*2,2),16);
+  const vsp=u8(15), engRpm=u16(100)/4, mode=u8(79);
+  const engTrq=s16(96), drvTrq=s16(90), genTrq=s16(92);
+  return {
+    vsp, engRpm, mode,
+    pbat:   s16(86)*0.0100,
+    peng:   2.09e-6 * engTrq * engRpm,
+    pgen:   GEN_PWR_COEF * (-genTrq) * engRpm,
+    pdrive: 0.000147 * drvTrq * vsp,
+  };
+}
+
+/* ── 再生コントローラ ─────────────────────────────────────── */
+const FL = { frames: [], t0: 0, t1: 0, vt: 0, playing: false, speed: 1, lastNow: 0, raf: 0 };
+function frameIdxAt(t){
+  const f=FL.frames; if(!f.length) return -1;
+  let lo=0,hi=f.length-1,ans=0;
+  while(lo<=hi){const m=(lo+hi)>>1; if(f[m].t<=t){ans=m;lo=m+1;}else hi=m-1;}
+  return ans;
+}
+function flowRenderAt(t){
+  const i=frameIdxAt(t); if(i<0) return;
+  const fr=FL.frames[i];
+  D.vsp=fr.vsp; D.engRot=fr.engRpm; D.runMode=fr.mode; D.dispMode=fr.dispMode;
+  D.peng=fr.peng; D.pgen=fr.pgen; D.pdrive=fr.pdrive; D.pbat=fr.pbat; D.soc=fr.soc;
+  drawFlow();
+  window.__cur = t;
+  for(const k in charts) charts[k].draw();
+  const lbl=(fr.dispMode>=0&&MODE_LABELS[fr.dispMode])?MODE_LABELS[fr.dispMode]:'--';
+  document.getElementById('flowStat').textContent =
+    `t=${t.toFixed(1)}s  ${i+1}/${FL.frames.length}  ${lbl}`;
+}
+function flowStep(now){
+  if(!FL.playing) return;
+  const dt=(now-FL.lastNow)/1000; FL.lastNow=now;
+  FL.vt += dt*FL.speed;
+  if(FL.vt>=FL.t1){ FL.vt=FL.t1; flowPause(); }
+  document.getElementById('flowSeek').value=FL.vt;
+  flowRenderAt(FL.vt);
+  if(FL.playing) FL.raf=requestAnimationFrame(flowStep);
+}
+function flowPlay(){
+  if(!FL.frames.length) return;
+  if(FL.vt>=FL.t1) FL.vt=FL.t0;   // 末尾なら先頭へ
+  FL.playing=true; FL.lastNow=performance.now();
+  document.getElementById('flowPlay').textContent='⏸';
+  FL.raf=requestAnimationFrame(flowStep);
+}
+function flowPause(){
+  FL.playing=false; cancelAnimationFrame(FL.raf);
+  document.getElementById('flowPlay').textContent='▶';
+}
+function flowInit(frames){
+  flowPause();
+  FL.frames=frames;
+  const has=frames.length>0;
+  document.getElementById('tabBtnFlow').disabled = !has;
+  switchTab('graphs');   // 読み込み後はまずグラフ表示
+  if(!has){ window.__cur=null; return; }
+  FL.t0=frames[0].t; FL.t1=frames[frames.length-1].t; FL.vt=FL.t0;
+  const seek=document.getElementById('flowSeek');
+  seek.min=FL.t0; seek.max=FL.t1; seek.value=FL.t0;
+  flowRenderAt(FL.t0);
+}
+function switchTab(name){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
+  document.getElementById('tabGraphs').style.display = name==='graphs'?'block':'none';
+  document.getElementById('tabFlow').style.display   = name==='flow'  ?'block':'none';
+  if(name==='graphs'){ for(const k in charts){ try{ charts[k].resize(); charts[k].draw(); }catch(_){} } }
+  else drawFlow();
+}
+document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{ if(!b.disabled) switchTab(b.dataset.tab); }));
+document.getElementById('flowPlay').addEventListener('click',()=>{ FL.playing?flowPause():flowPlay(); });
+document.getElementById('flowSpeed').addEventListener('change',e=>{ FL.speed=parseFloat(e.target.value); });
+document.getElementById('flowSeek').addEventListener('input',e=>{ flowPause(); FL.vt=parseFloat(e.target.value); flowRenderAt(FL.vt); });
+
+/* 各チャートに再生位置の縦カーソルを描画 */
+Chart.register({
+  id:'flowCursor',
+  afterDraw(chart){
+    if(window.__cur==null) return;
+    const xs=chart.scales.x; if(!xs) return;
+    const px=xs.getPixelForValue(window.__cur);
+    const ca=chart.chartArea; if(px<ca.left||px>ca.right) return;
+    const c=chart.ctx; c.save();
+    c.strokeStyle='rgba(255,255,255,0.6)'; c.lineWidth=1.5;
+    c.beginPath(); c.moveTo(px,ca.top); c.lineTo(px,ca.bottom); c.stroke();
+    c.restore();
+  }
+});
+
+/* グラフ上をドラッグ → その時刻へフロー図をスクラブ（双方向同期） */
+let scrubbing=false;
+function scrubFrom(chart,clientX){
+  if(!FL.frames.length) return;
+  const rect=chart.canvas.getBoundingClientRect();
+  let t=chart.scales.x.getValueForPixel(clientX-rect.left);
+  t=Math.max(FL.t0,Math.min(FL.t1,t));
+  FL.vt=t; document.getElementById('flowSeek').value=t; flowRenderAt(t);
+}
+['cVehicle','cBattery','cPower','cTemp','cSysv'].forEach(id=>{
+  const cv=document.getElementById(id);
+  cv.style.touchAction='none';   // モバイルでページスクロールに奪われない
+  cv.addEventListener('pointerdown',e=>{
+    const ch=Chart.getChart(cv); if(!ch||!FL.frames.length) return;
+    scrubbing=true; flowPause();
+    try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+    scrubFrom(ch,e.clientX);
+  });
+  cv.addEventListener('pointermove',e=>{ if(scrubbing){ const ch=Chart.getChart(cv); if(ch) scrubFrom(ch,e.clientX); } });
+  const end=e=>{ scrubbing=false; try{ cv.releasePointerCapture(e.pointerId); }catch(_){} };
+  cv.addEventListener('pointerup',end);
+  cv.addEventListener('pointercancel',end);
+});
 
 /* ── ファイル入力 ─────────────────────────────────────────── */
 const dropZone = document.getElementById('dropZone');
@@ -235,6 +538,8 @@ function parseCsvLog(text) {
 function parseDebugLog(text) {
   const ds = emptyDs();
   let startMs = null;
+  let lastSoc = NaN;
+  stableMode = -1;   // モード遷移ホールドを先頭からやり直し
 
   function extractMs(line) {
     const m = line.match(/^\[(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]/);
@@ -264,6 +569,24 @@ function parseDebugLog(text) {
     if (!okm) continue;
     const raw = okm[1].trim().toUpperCase();
 
+    // 2920 マルチフレーム応答 → フロー用フィールド + POWERチャート
+    if (raw.includes('622920')) {
+      const full = reassemble2920(raw);
+      const f = compute2920(full);
+      if (f) {
+        const dispMode = updateStableMode(f.mode);
+        ds.pdrive.push({ x: t, y: +f.pdrive.toFixed(2) });
+        ds.peng.push({   x: t, y: +f.peng.toFixed(2) });
+        ds.pgen.push({   x: t, y: +f.pgen.toFixed(2) });
+        ds.pbat20.push({ x: t, y: +f.pbat.toFixed(2) });
+        ds.mode.push({   x: t, y: f.mode });
+        ds.speed.push({  x: t, y: f.vsp });
+        ds.rpm.push({    x: t, y: Math.round(f.engRpm) });
+        ds.flow.push({ t, dispMode, ...f, soc: lastSoc });
+        continue;
+      }
+    }
+
     const last = {};
     for (const tok of raw.split(/\s+/)) {
       if (tok.startsWith('410C') && tok.length >= 8) {
@@ -289,6 +612,7 @@ function parseDebugLog(text) {
         if (!isNaN(bitmap) && (bitmap & 0x01)) last.intTemp = s1 - 40;
       }
     }
+    if (last.soc != null) lastSoc = last.soc;
     for (const [k, v] of Object.entries(last)) ds[k].push({ x: t, y: v });
   }
   return ds;
@@ -299,7 +623,10 @@ function emptyDs() {
     speed: [], rpm: [],
     vbat: [], ibat: [], pbat: [],
     soc: [], sysv: [],
-    engTemp: [], catTemp: [], intTemp: []
+    engTemp: [], catTemp: [], intTemp: [],
+    // 2920由来（POWERチャート + フロー再生）
+    pdrive: [], peng: [], pgen: [], pbat20: [], mode: [],
+    flow: []
   };
 }
 
@@ -308,7 +635,8 @@ const C = {
   speed:   '#00ffcc', rpm:     '#4488ff',
   vbat:    '#ff6688', ibat:    '#88ffaa', pbat: '#ffaa00',
   soc:     '#00ccff', sysv:    '#cc88ff',
-  engTemp: '#ff8844', catTemp: '#ff4444', intTemp: '#44aaff'
+  engTemp: '#ff8844', catTemp: '#ff4444', intTemp: '#44aaff',
+  pdrive:  '#ffb347', peng: '#ff6644', pgen: '#00e5ff', pbat20: '#c9a0ff', mode: '#8899aa'
 };
 
 const Y_WIDTH = 55;
@@ -468,6 +796,32 @@ function render(ds, filename, fmt) {
       ch => syncAxesLabels(ch, ['y', 'y2']));
   }
 
+  /* --- Power (2920由来。データがある場合のみ) --- */
+  document.getElementById('cardPower').style.display = ds.pdrive.length ? 'block' : 'none';
+  if (ds.pdrive.length) {
+    const powDefs = [
+      { label: 'P_wheel (kW)', data: ds.pdrive, color: C.pdrive, axis: 'y'  },
+      { label: 'P_eng (kW)',   data: ds.peng,   color: C.peng,   axis: 'y'  },
+      { label: 'P_gen (kW)',   data: ds.pgen,   color: C.pgen,   axis: 'y'  },
+      { label: 'P_bat (kW)',   data: ds.pbat20, color: C.pbat20, axis: 'y'  },
+      { label: 'mode',         data: ds.mode,   color: C.mode,   axis: 'y2', step: true },
+    ];
+    const cfg = baseCfg();
+    cfg.data = {
+      datasets: powDefs.map(d => ({
+        label: d.label, data: d.data, showLine: true,
+        borderColor: d.color, yAxisID: d.axis, fill: false,
+        stepped: d.step ? 'before' : false,
+        borderWidth: d.step ? 1 : 1.5,
+      }))
+    };
+    cfg.options.scales.y  = scaleOpt('kW', C.pdrive, 'left');
+    cfg.options.scales.y2 = scaleOpt('mode', C.mode, 'right', 0, 80);
+    cfg.options.scales.y2.ticks.stepSize = 10;
+    charts.power = new Chart(document.getElementById('cPower'), cfg);
+    makeToggles('togPower', 'power', powDefs.map(d => ({ label: d.label, color: d.color })));
+  }
+
   /* --- Temperature (データがある場合のみ表示) --- */
   const hasTemp = ds.engTemp.length || ds.catTemp.length || ds.intTemp.length;
   document.getElementById('cardTemp').style.display = hasTemp ? 'block' : 'none';
@@ -504,6 +858,13 @@ function render(ds, filename, fmt) {
     charts.sysv = new Chart(document.getElementById('cSysv'), cfg);
     makeToggles('togSysv', 'sysv', [{ label: 'SysV (V)', color: C.sysv }]);
   }
+
+  /* --- Flow playback (2920フレームがある場合のみ) --- */
+  // 先頭のSOC欠損(初回015B以前)を最初の既知SOCで補完
+  const firstSoc = ds.flow.find(f => !isNaN(f.soc));
+  if (firstSoc) for (const f of ds.flow) { if (isNaN(f.soc)) f.soc = firstSoc.soc; else break; }
+  window.__cur = null;
+  flowInit(ds.flow);
 }
 </script>
 </body>
