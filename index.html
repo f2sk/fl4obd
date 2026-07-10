@@ -270,7 +270,7 @@ body.landscape .meter-card {
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260710e</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260711a</span></div>
   <div class="hdr-r">
     <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
@@ -941,7 +941,14 @@ function releaseWakeLock() {
 
 // ページが再表示されたとき（通知バーを開けて戻るなど）に再取得
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && connected) requestWakeLock();
+  if (document.visibilityState !== 'visible') return;
+  requestWakeLock();                       // 非表示中に解放されたウェイクロックを再取得
+  if (reconnecting || !connected) return;  // 再接続中/未接続はそれぞれの処理に委ねる
+  // バックグラウンドでスロットルされ停止したポーリングを明示的に再始動。
+  // リンクが実は切れていれば 無応答→ストール検出→forceReconnect が拾う。
+  stallCount = 0;
+  clearTimeout(pollWatchdog);
+  sendNextPid();
 });
 
 // ─── BLE ──────────────────────────────────────────────────
