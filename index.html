@@ -270,7 +270,7 @@ body.landscape .meter-card {
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260710a</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260710b</span></div>
   <div class="hdr-r">
     <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
@@ -653,7 +653,8 @@ function drawFlow(){
   const batBus=-pbat;   // +:充電(bus→BAT) / -:放電(BAT→bus)
   // 機械(橙): ENG直結→車輪(上→右) / MOT→車輪(縦) / ENG↔GEN軸(発電=ENG→GEN / 力行=GEN→ENG)
   fArrow(svg,[[fEX+fBW/2,fEY],[fEX+fBW/2,fWY],[fWX-24,fWY]],'mech',on(engWheel),on(engWheel)?engWheel:null,128,140);
-  fArrow(svg,[[fTX+fBW/2,fTY],[fTX+fBW/2,fWY+24]],'mech',on(trcWheel),on(trcWheel)?trcWheel:null,286,140,regen?FX_R:FX_M,'end');
+  if(regen) fArrow(svg,[[fTX+fBW/2,fWY+24],[fTX+fBW/2,fTY]],'mech',on(trcWheel),on(trcWheel)?trcWheel:null,286,140,FX_R,'end'); // 車輪→MOT(回生)
+  else      fArrow(svg,[[fTX+fBW/2,fTY],[fTX+fBW/2,fWY+24]],'mech',on(trcWheel),on(trcWheel)?trcWheel:null,286,140,FX_M,'end'); // MOT→車輪(駆動)
   if(genMot) fArrow(svg,[[fEX+fBW/2,fGY],[fEX+fBW/2,fEY+fBH]],'mech',on(engGen),on(engGen)?engGen:null,128,326,dump?FX_R:FX_M); // GEN→ENG(上)
   else       fArrow(svg,[[fEX+fBW/2,fEY+fBH],[fEX+fBW/2,fGY]],'mech',on(engGen),on(engGen)?engGen:null,128,326);               // ENG→GEN(下)
   // 電気: GEN↔bus(発電=GEN→bus / 力行=bus→GEN) / bus↔MOT(上) / BAT↔bus(下) / bus→AUX(右)
