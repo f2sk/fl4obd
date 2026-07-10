@@ -199,36 +199,28 @@
   <div id="tabGraphs" class="tab-pane">
     <p class="hint" id="scrubHint">▸ グラフをドラッグすると、その時刻へ FLOW が同期します</p>
 
-    <div class="chart-card" id="cardVehicle">
+    <div class="chart-card" id="card1">
       <div class="chart-header">
-        <span class="chart-title">VEHICLE</span>
-        <div class="chart-toggles" id="togVehicle"></div>
+        <span class="chart-title">SPEED / MODE / SOC</span>
+        <div class="chart-toggles" id="tog1"></div>
       </div>
-      <canvas id="cVehicle"></canvas>
+      <canvas id="c1"></canvas>
     </div>
 
-    <div class="chart-card" id="cardBattery">
+    <div class="chart-card" id="card2">
       <div class="chart-header">
-        <span class="chart-title">BATTERY</span>
-        <div class="chart-toggles" id="togBattery"></div>
+        <span class="chart-title">RPM / P_eng</span>
+        <div class="chart-toggles" id="tog2"></div>
       </div>
-      <canvas id="cBattery"></canvas>
+      <canvas id="c2"></canvas>
     </div>
 
-    <div class="chart-card" id="cardPower" style="display:none">
+    <div class="chart-card" id="card3">
       <div class="chart-header">
-        <span class="chart-title">POWER (2920)</span>
-        <div class="chart-toggles" id="togPower"></div>
+        <span class="chart-title">P_wheel / P_bat</span>
+        <div class="chart-toggles" id="tog3"></div>
       </div>
-      <canvas id="cPower"></canvas>
-    </div>
-
-    <div class="chart-card" id="cardTemp" style="display:none">
-      <div class="chart-header">
-        <span class="chart-title">TEMPERATURE</span>
-        <div class="chart-toggles" id="togTemp"></div>
-      </div>
-      <canvas id="cTemp"></canvas>
+      <canvas id="c3"></canvas>
     </div>
 
     <div class="chart-card" id="cardSysv" style="display:none">
@@ -454,7 +446,7 @@ function scrubFrom(chart,clientX){
   t=Math.max(FL.t0,Math.min(FL.t1,t));
   FL.vt=t; document.getElementById('flowSeek').value=t; flowRenderAt(t);
 }
-['cVehicle','cBattery','cPower','cTemp','cSysv'].forEach(id=>{
+['c1','c2','c3','cSysv'].forEach(id=>{
   const cv=document.getElementById(id);
   cv.style.touchAction='none';   // モバイルでページスクロールに奪われない
   cv.addEventListener('pointerdown',e=>{
@@ -735,114 +727,59 @@ function render(ds, filename, fmt) {
     ds.intTemp.length ? `<span>IntTemp: <b>${ds.intTemp.length}点</b></span>` : '',
   ].join('');
 
-  /* --- Speed / RPM --- */
+  /* --- 1段目: Speed / Mode / SOC --- */
   {
     const cfg = baseCfg();
     cfg.data = {
       datasets: [
         { label: 'Speed (km/h)', data: ds.speed, showLine: true, borderColor: C.speed, yAxisID: 'y',  fill: false },
-        { label: 'RPM',          data: ds.rpm,   showLine: true, borderColor: C.rpm,   yAxisID: 'y2', fill: false },
+        { label: 'SOC (%)',      data: ds.soc,   showLine: true, borderColor: C.soc,   yAxisID: 'y2', fill: false },
+        { label: 'Mode',         data: ds.mode,  showLine: true, borderColor: C.mode,  yAxisID: 'y2', fill: false, stepped: 'before', borderWidth: 1.2 },
       ]
     };
-    cfg.options.scales.y  = scaleOpt('km/h', C.speed, 'left',  0);
-    cfg.options.scales.y2 = scaleOpt('rpm',  C.rpm,   'right', 0);
-    charts.vehicle = new Chart(document.getElementById('cVehicle'), cfg);
-    makeToggles('togVehicle', 'vehicle', [
+    cfg.options.scales.y  = scaleOpt('km/h',     C.speed, 'left',  0);
+    cfg.options.scales.y2 = scaleOpt('% / mode', C.soc,   'right', 0, 100);
+    charts.c1 = new Chart(document.getElementById('c1'), cfg);
+    makeToggles('tog1', 'c1', [
       { label: 'Speed (km/h)', color: C.speed },
-      { label: 'RPM',          color: C.rpm   },
+      { label: 'SOC (%)',      color: C.soc   },
+      { label: 'Mode',         color: C.mode  },
     ]);
   }
 
-  /* --- Battery: Power / SOC / VBAT / IBAT --- */
+  /* --- 2段目: RPM / P_eng --- */
   {
-    const battDefs = [
-      { label: 'Power (kW)', data: ds.pbat, color: C.pbat, axis: 'y'  },
-      { label: 'IBAT (A)',   data: ds.ibat, color: C.ibat, axis: 'y'  },
-      { label: 'SOC (%)',    data: ds.soc,  color: C.soc,  axis: 'y2' },
-      { label: 'VBAT (V)',   data: ds.vbat, color: C.vbat, axis: 'y2' },
-    ];
-    const UNITS = { 'Power (kW)': 'kW', 'SOC (%)': '%', 'VBAT (V)': 'V', 'IBAT (A)': 'A' };
     const cfg = baseCfg();
     cfg.data = {
-      datasets: battDefs.map(d => ({
-        label: d.label, data: d.data, showLine: true,
-        borderColor: d.color, yAxisID: d.axis, fill: false,
-      }))
+      datasets: [
+        { label: 'RPM',        data: ds.rpm,  showLine: true, borderColor: C.rpm,  yAxisID: 'y',  fill: false },
+        { label: 'P_eng (kW)', data: ds.peng, showLine: true, borderColor: C.peng, yAxisID: 'y2', fill: false },
+      ]
     };
-    cfg.options.scales.y = {
-      type: 'linear', position: 'left',
-      grid:  { color: '#1a3050' },
-      ticks: { color: '#607090', font: { size: 10 } },
-      title: { display: true, text: '', color: '#607090', font: { size: 10 } },
-      afterFit: s => { s.width = Y_WIDTH; },
-    };
-    cfg.options.scales.y2 = {
-      type: 'linear', position: 'right',
-      grid:  { color: 'transparent' },
-      ticks: { color: '#607090', font: { size: 10 } },
-      title: { display: true, text: '', color: '#607090', font: { size: 10 } },
-      afterFit: s => { s.width = Y_WIDTH; },
-    };
-    cfg.options.plugins.tooltip = {
-      mode: 'index', intersect: false,
-      callbacks: {
-        label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} ${UNITS[ctx.dataset.label] ?? ''}`
-      }
-    };
-    charts.battery = new Chart(document.getElementById('cBattery'), cfg);
-    syncAxesLabels(charts.battery, ['y', 'y2']);
-    makeToggles('togBattery', 'battery',
-      battDefs.map(d => ({ label: d.label, color: d.color })),
-      ch => syncAxesLabels(ch, ['y', 'y2']));
+    cfg.options.scales.y  = scaleOpt('rpm', C.rpm,  'left', 0);
+    cfg.options.scales.y2 = scaleOpt('kW',  C.peng, 'right');
+    charts.c2 = new Chart(document.getElementById('c2'), cfg);
+    makeToggles('tog2', 'c2', [
+      { label: 'RPM',        color: C.rpm  },
+      { label: 'P_eng (kW)', color: C.peng },
+    ]);
   }
 
-  /* --- Power (2920由来。データがある場合のみ) --- */
-  document.getElementById('cardPower').style.display = ds.pdrive.length ? 'block' : 'none';
-  if (ds.pdrive.length) {
-    const powDefs = [
-      { label: 'P_wheel (kW)', data: ds.pdrive, color: C.pdrive, axis: 'y'  },
-      { label: 'P_eng (kW)',   data: ds.peng,   color: C.peng,   axis: 'y'  },
-      { label: 'P_gen (kW)',   data: ds.pgen,   color: C.pgen,   axis: 'y'  },
-      { label: 'P_bat (kW)',   data: ds.pbat20, color: C.pbat20, axis: 'y'  },
-      { label: 'mode',         data: ds.mode,   color: C.mode,   axis: 'y2', step: true },
-    ];
+  /* --- 3段目: P_wheel / P_bat (同一kW軸) --- */
+  {
     const cfg = baseCfg();
     cfg.data = {
-      datasets: powDefs.map(d => ({
-        label: d.label, data: d.data, showLine: true,
-        borderColor: d.color, yAxisID: d.axis, fill: false,
-        stepped: d.step ? 'before' : false,
-        borderWidth: d.step ? 1 : 1.5,
-      }))
+      datasets: [
+        { label: 'P_wheel (kW)', data: ds.pdrive, showLine: true, borderColor: C.pdrive, yAxisID: 'y', fill: false },
+        { label: 'P_bat (kW)',   data: ds.pbat20, showLine: true, borderColor: C.pbat20, yAxisID: 'y', fill: false },
+      ]
     };
-    cfg.options.scales.y  = scaleOpt('kW', C.pdrive, 'left');
-    cfg.options.scales.y2 = scaleOpt('mode', C.mode, 'right', 0, 80);
-    cfg.options.scales.y2.ticks.stepSize = 10;
-    charts.power = new Chart(document.getElementById('cPower'), cfg);
-    makeToggles('togPower', 'power', powDefs.map(d => ({ label: d.label, color: d.color })));
-  }
-
-  /* --- Temperature (データがある場合のみ表示) --- */
-  const hasTemp = ds.engTemp.length || ds.catTemp.length || ds.intTemp.length;
-  document.getElementById('cardTemp').style.display = hasTemp ? 'block' : 'none';
-  if (hasTemp) {
-    const tempDefs = [
-      { label: 'Eng Temp (°C)', data: ds.engTemp, color: C.engTemp, axis: 'y'  },
-      { label: 'Cat Temp (°C)', data: ds.catTemp, color: C.catTemp, axis: 'y2' },
-      { label: 'Int Temp (°C)', data: ds.intTemp, color: C.intTemp, axis: 'y'  },
-    ];
-    const cfg = baseCfg();
-    cfg.data = {
-      datasets: tempDefs.map(d => ({
-        label: d.label, data: d.data, showLine: true,
-        borderColor: d.color, yAxisID: d.axis, fill: false,
-      }))
-    };
-    // 左軸: Eng/Int Temp (0~120°C)  右軸: Cat Temp (0~900°C)
-    cfg.options.scales.y  = scaleOpt('°C', C.engTemp, 'left',  -20, 120);
-    cfg.options.scales.y2 = scaleOpt('°C', C.catTemp, 'right', 0,   900);
-    charts.temp = new Chart(document.getElementById('cTemp'), cfg);
-    makeToggles('togTemp', 'temp', tempDefs.map(d => ({ label: d.label, color: d.color })));
+    cfg.options.scales.y = scaleOpt('kW', C.pdrive, 'left');
+    charts.c3 = new Chart(document.getElementById('c3'), cfg);
+    makeToggles('tog3', 'c3', [
+      { label: 'P_wheel (kW)', color: C.pdrive },
+      { label: 'P_bat (kW)',   color: C.pbat20 },
+    ]);
   }
 
   /* --- SysV (データがある場合のみ表示) --- */
