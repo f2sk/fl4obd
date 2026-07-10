@@ -270,7 +270,7 @@ body.landscape .meter-card {
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260710c</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260710d</span></div>
   <div class="hdr-r">
     <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
@@ -922,6 +922,7 @@ function onRx(evt) {
     gotResponse = true;
   }
   rxBuf = parts[parts.length - 1];
+  if (gotResponse) stallCount = 0;   // 応答が来た＝リンク生存
   if (gotResponse && connected) sendNextPid();
 }
 // ─── Screen Wake Lock ────────────────────────────────────
@@ -946,6 +947,11 @@ document.addEventListener('visibilitychange', () => {
 // ─── BLE ──────────────────────────────────────────────────
 let bleDevice = null, bleChar = null, connected = false;
 let rxBuf = '', pollWatchdog = null, demoTimer = null;
+// 自動再接続 / ストール検出
+let userDisc = false;      // [切断する]ボタンによる手動切断か
+let reconnecting = false;  // 自動再接続ループ実行中ガード
+let stallCount = 0;        // 連続無応答回数
+const STALL_LIMIT = 5;     // これ以上(≒7.5s無応答)で能動的に再接続
 
 // 特定文字列を含むブロック（'>'区切り）が届くまで待つ
 let pendingWait = null;
@@ -1003,7 +1009,20 @@ function sendNextPid() {
   }
   try { sendRaw(cmd); } catch(e) { log('✗ send err: ' + e.message, 'e'); }
   // 無応答フォールバック(2920マルチフレームは重いので長め)
-  pollWatchdog = setTimeout(sendNextPid, 1500);
+  pollWatchdog = setTimeout(onPollTimeout, 1500);
+}
+
+// 応答が1.5s来なかった時。連続 STALL_LIMIT 回で能動的に再接続
+function onPollTimeout() {
+  if (!connected) return;
+  stallCount++;
+  if (stallCount >= STALL_LIMIT) {
+    log('無応答が続くため再接続します (' + stallCount + '連続)', 'e');
+    stallCount = 0;
+    forceReconnect();
+    return;
+  }
+  sendNextPid();
 }
 
 async function initElm() {
@@ -1093,7 +1112,11 @@ async function getBleChar(server) {
 }
 
 async function toggleConnect() {
-  if (connected) { doDisc(); return; }
+  // 接続中 or 再接続試行中に押されたら手動切断（自動再接続を止める）
+  if (connected || reconnecting) { userDisc = true; doDisc(); return; }
+
+  userDisc = false;
+  stallCount = 0;
 
   if (!navigator.bluetooth) {
     log('✗ Web Bluetooth 非対応', 'e');
@@ -1127,7 +1150,8 @@ async function toggleConnect() {
 
     bleDevice.addEventListener('gattserverdisconnected', () => {
       log('切断されました', 'e');
-      doDisc();
+      if (userDisc) doDisc();       // 手動切断 → 破棄
+      else attemptReconnect();      // 予期しない切断 → 自動再接続
     });
 
     log('接続中: ' + bleDevice.name, 'ok');
@@ -1153,6 +1177,7 @@ async function toggleConnect() {
 }
 
 function doDisc() {
+  reconnecting = false;
   clearTimeout(pollWatchdog);
   releaseWakeLock();
   connected = false;
@@ -1161,15 +1186,64 @@ function doDisc() {
   setUI('off');
 }
 
+// ストール検出時: リンクを一度落として自動再接続に乗せる
+function forceReconnect() {
+  if (reconnecting || userDisc) return;
+  clearTimeout(pollWatchdog);
+  connected = false;
+  if (bleDevice && bleDevice.gatt.connected) {
+    bleDevice.gatt.disconnect();          // → gattserverdisconnected → attemptReconnect
+  } else {
+    attemptReconnect();                   // 既に切れている場合は直接
+  }
+}
+
+// bleDevice 参照を保持したまま gatt.connect() で再接続（ユーザー操作不要）。
+// 指数バックオフ 1→2→4→8s で成功するまで（手動切断まで）繰り返す。
+async function attemptReconnect() {
+  if (reconnecting || userDisc || !bleDevice) return;
+  reconnecting = true;
+  connected = false;
+  clearTimeout(pollWatchdog);
+  releaseWakeLock();
+  setUI('rec');
+  let delay = 1000;
+  while (!userDisc && bleDevice) {
+    try {
+      log('再接続 試行...', 'tx');
+      const server = await bleDevice.gatt.connect();
+      bleChar = await getBleChar(server);
+      if (!bleChar) throw new Error('書き込みキャラクタリスティック未検出');
+      rxBuf = ''; stallCount = 0;
+      await initElm();
+      if (userDisc) { doDisc(); return; }
+      connected = true; reconnecting = false;
+      setUI('on');
+      log('再接続 成功', 'ok');
+      requestWakeLock();
+      buildCmdQueue();
+      sendNextPid();
+      return;
+    } catch (e) {
+      log('再接続失敗: ' + e.message + ' (' + (delay / 1000) + 's後に再試行)', 'e');
+      await new Promise(r => setTimeout(r, delay));
+      delay = Math.min(delay * 2, 8000);
+    }
+  }
+  reconnecting = false;
+  doDisc();   // 手動切断された or デバイス消失
+}
+
 function setUI(s) {
   const dot = document.getElementById('dot');
   const txt = document.getElementById('sttTxt');
   const btn = document.getElementById('connBtn');
-  dot.className = 'dot ' + (s === 'on' ? 'on' : s === 'chk' ? 'chk' : '');
-  txt.textContent = s === 'on' ? 'CONNECTED' : s === 'chk' ? 'CONNECTING' : 'DISCONNECTED';
-  txt.style.color  = s === 'on' ? '#00cc66' : s === 'chk' ? '#ffaa00' : '#2a5a7a';
-  btn.textContent  = s === 'on' ? '[ 切断する ]' : '[ BLUETOOTH 接続 ]';
-  btn.disabled     = (s === 'chk');
+  const busy = (s === 'chk' || s === 'rec');
+  dot.className = 'dot ' + (s === 'on' ? 'on' : busy ? 'chk' : '');
+  txt.textContent = s === 'on' ? 'CONNECTED' : s === 'chk' ? 'CONNECTING' : s === 'rec' ? 'RECONNECTING' : 'DISCONNECTED';
+  txt.style.color  = s === 'on' ? '#00cc66' : busy ? '#ffaa00' : '#2a5a7a';
+  btn.textContent  = (s === 'on' || s === 'rec') ? '[ 切断する ]' : '[ BLUETOOTH 接続 ]';
+  btn.disabled     = (s === 'chk');   // 再接続中(rec)はボタン有効=中止可能
 }
 
 // ─── DEMO ─────────────────────────────────────────────────
