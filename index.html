@@ -270,7 +270,7 @@ body.landscape .meter-card {
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260710d</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260710e</span></div>
   <div class="hdr-r">
     <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
@@ -983,8 +983,8 @@ async function sendRaw(s) {
 //   0142   … 12V   5秒ごとに1回だけ差し込む
 const CMD_2920 = '222920';
 const MIN_2920_INTERVAL = 100; // ms  2920の下限ガード
-const SOC_INTERVAL = 1000;     // ms
-const V12_INTERVAL = 5000;     // ms
+const SOC_INTERVAL = 3000;     // ms  SOCは変化が遅いので間引き、2920の枠を確保
+const V12_INTERVAL = 10000;    // ms  12Vも同様
 
 let last2920 = 0, lastSoc = 0, lastV12 = 0;
 
