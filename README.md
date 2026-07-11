@@ -83,7 +83,7 @@ i-MMD（2モーターHV）の電力の流れを、**ENG / GEN / MOT / BAT / AUX-
 
 各信号の同定手法・根拠・変換係数・限界、および車輪出力／踏面駆動力の再構成は、技術レポートにまとめている。
 
-📄 **[FL4 i-MMD パワートレイン拡張DID 解析レポート（PDF, 全20p）](docs/did-analysis/fl4-did-analysis.pdf)**
+📖 **[解析レポート（Markdown・GitHubでそのまま閲覧）](docs/did-analysis/fl4-did-analysis.md)** ／ 📄 **[PDF版（全20p, 2段組）](docs/did-analysis/fl4-did-analysis.pdf)**
 
 ![駆動系構成](docs/did-analysis/figs/fig_driveline.png)
 
