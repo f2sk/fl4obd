@@ -7,9 +7,9 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   * { box-sizing: border-box; }
-  html,body { margin:0; height:100%; background:#0a0e14; color:#cfe; font:12px/1.4 system-ui,sans-serif; overflow:hidden; }
+  html,body { margin:0; height:100vh; height:100dvh; background:#0a0e14; color:#cfe; font:12px/1.4 system-ui,sans-serif; overflow:hidden; }
   /* ── ローダ ── */
-  #loader { display:flex; flex-direction:column; gap:14px; align-items:center; justify-content:center; height:100vh; padding:20px; }
+  #loader { display:flex; flex-direction:column; gap:14px; align-items:center; justify-content:center; height:100vh; height:100dvh; padding:20px; overflow:auto; }
   #loader h1 { font-size:16px; color:#4a9eff; margin:0; }
   .drop { border:1px dashed #2a5a8c; border-radius:8px; padding:16px 22px; background:#0d1520; min-width:280px; }
   .drop label { display:block; margin:6px 0 2px; color:#8ab; }
@@ -18,7 +18,7 @@
   #loadBtn:hover,#demoBtn2:hover { background:#122840; border-color:#4a9eff; }
   #loadMsg { color:#c85; min-height:16px; }
   /* ── アプリ (3タイル) ── */
-  #app { display:none; height:100vh; gap:3px; padding:3px;
+  #app { display:none; height:100vh; height:100dvh; gap:3px; padding:3px;
          grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr auto;
          grid-template-areas: "s2 s1" "s2 s3" "ctrl ctrl"; }
   #app.on { display:grid; }
@@ -32,12 +32,12 @@
   .tile .tag { position:absolute; top:4px; left:5px; z-index:500; background:#0009; padding:1px 6px; border-radius:3px; color:#7ac; font-size:10px; pointer-events:none; }
   .hud { position:absolute; bottom:4px; left:5px; z-index:500; background:#000a; padding:3px 7px; border-radius:4px; font-size:11px; pointer-events:none; white-space:pre; }
   /* ── コントロール ── */
-  #ctrl { display:flex; align-items:center; gap:8px; padding:5px 8px; background:#0d1218; border:1px solid #1c2836; border-radius:5px; }
+  #ctrl { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; padding:5px 8px; background:#0d1218; border:1px solid #1c2836; border-radius:5px; }
+  #seek { flex:1 1 100%; order:-1; }
   #playBtn { width:38px; padding:5px 0; background:#0d1e30; border:1px solid #2a5a8c; color:#cfe; border-radius:5px; cursor:pointer; font-size:14px; }
-  #seek { flex:1; }
   .spd { padding:3px 7px; background:#0d1520; border:1px solid #1a3a5a; color:#5a8; border-radius:4px; cursor:pointer; font-size:11px; }
   .spd.on { border-color:#ffaa00; color:#ffaa00; }
-  #tlabel { min-width:150px; text-align:right; color:#8ab; font-variant-numeric:tabular-nums; }
+  #tlabel { margin-left:auto; text-align:right; color:#8ab; font-variant-numeric:tabular-nums; }
   .leaflet-container { background:#0d1218; }
   svg#flowSvg { width:100%; height:100%; display:block; background:#0a1520; }
 </style>
