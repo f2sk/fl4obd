@@ -128,6 +128,7 @@ function parseFrames(text){
 }
 
 // ═══ 状態 ═════════════════════════════════════════════════
+const FOLLOW_SPAN_M=700;   // 画面2が常に映す実距離(m四方)。タイル画素数から初期ズーム算出
 let GPS=[], OBD=[], T0=0, T1=0, PT=0, playing=false, speed=1, lastRAF=0;
 let map1, map2, latlngs=[], pastLine1, pastLine2, cur1, cur2;
 
@@ -163,7 +164,13 @@ function buildMaps(){
   pastLine2=L.polyline([],{color:'#ffb020',weight:4}).addTo(map2);
   cur2=L.circleMarker(latlngs[0],{radius:6,color:'#fff',fillColor:'#4a9eff',fillOpacity:1,weight:2}).addTo(map2);
   map2.setView(latlngs[0],16);
-  setTimeout(()=>{map1.invalidateSize();map2.invalidateSize();},60);
+  setTimeout(()=>{map1.invalidateSize();map2.invalidateSize();applyFollowZoom();},60);
+}
+// 画面2: タイル画素数に応じ FOLLOW_SPAN_M を映す初期ズームを算出（画面サイズ非依存の絵）
+function applyFollowZoom(){
+  if(!map2||!latlngs.length) return;
+  const b=L.latLng(latlngs[0][0],latlngs[0][1]).toBounds(FOLLOW_SPAN_M);
+  map2.setZoom(map2.getBoundsZoom(b));
 }
 
 // ═══ パワーフロー (index/viewer から移植) ═════════════════
