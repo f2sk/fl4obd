@@ -289,6 +289,7 @@ body.landscape .meter-card {
 
 <div style="display:flex;gap:6px;margin-bottom:0;">
   <button class="conn-btn" id="dataBtn" onclick="toggleDataRec()" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;">[ DATA ]</button>
+  <button class="conn-btn" id="gpsBtn" onclick="toggleGps()" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;">[ GPS ]</button>
   <button class="conn-btn" id="demoBtn" onclick="toggleDemo()" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;">[ DEMO ]</button>
   <a href="viewer.html" target="_blank" class="conn-btn" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;text-decoration:none;display:flex;align-items:center;justify-content:center;">[ LOG VIEWER ]</a>
 </div>
@@ -301,6 +302,9 @@ let logRecording = false;
 let dataBuffer = [];
 let dataRecording = false;
 let dataUpdated = false;
+let gpsEnabled = false;   // GPS(GPX)記録トグル。状態は localStorage 永続
+let gpsWatchId = null;    // watchPosition のID
+let gpsBuffer = [];       // {time(ISO), lat, lon, ele, spd, acc}
 
 function log(msg, cls) {
   const now = new Date();
@@ -327,10 +331,12 @@ function toggleRec() {
     btn.textContent = '■ STOP';
     btn.classList.add('rec');
     log('--- REC START ---', 'ok');
+    syncGpsRecording();
   } else {
     logRecording = false;
     btn.textContent = '● REC';
     btn.classList.remove('rec');
+    syncGpsRecording();
     if (logBuffer.length === 0) return;
     const lines = logBuffer.map(e => `[${e.ts}] [${(e.cls||'   ').padEnd(3)}] ${e.msg}`);
     const text = 'FL4 OBD MONITOR LOG\n' +
@@ -369,10 +375,12 @@ function toggleDataRec() {
     btn.textContent = '■ STOP';
     btn.classList.add('rec');
     log('--- DATA REC START ---', 'ok');
+    syncGpsRecording();
   } else {
     dataRecording = false;
     btn.textContent = '[ DATA ]';
     btn.classList.remove('rec');
+    syncGpsRecording();
     if (dataBuffer.length === 0) return;
     const header = 'timestamp,eng_rpm,vsp_kmh,psys_kW,peng_kW,pbat_kW,soc_pct,vsys_V,run_mode';
     const blob = new Blob([header + '\n' + dataBuffer.join('\n')], { type: 'text/csv' });
@@ -384,6 +392,82 @@ function toggleDataRec() {
     URL.revokeObjectURL(url);
   }
 }
+
+// ─── GPS (GPXトラック記録) ───────────────────────────────
+// トグルON時、録画(REC/DATA)中に watchPosition で座標を溜め、
+// 録画終了時に GPX を書き出す。時刻は toISOString() で他ログと共通。
+function recordingActive() { return logRecording || dataRecording; }
+
+function onGpsFix(pos) {
+  const c = pos.coords;
+  gpsBuffer.push({
+    time: new Date(pos.timestamp).toISOString(),   // 測位時刻(ISO, UTC) = 他ログと同基準
+    lat: c.latitude, lon: c.longitude,
+    ele: (c.altitude != null ? c.altitude : null),
+    spd: (c.speed  != null ? c.speed  : null),      // m/s (端末による)
+    acc: c.accuracy
+  });
+}
+function onGpsErr(e) { log('GPS: ' + e.message, 'err'); }
+
+function startGps() {
+  if (!gpsEnabled || gpsWatchId != null) return;
+  if (!navigator.geolocation) { log('GPS: 非対応ブラウザ', 'err'); return; }
+  gpsBuffer = [];
+  gpsWatchId = navigator.geolocation.watchPosition(onGpsFix, onGpsErr,
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 });
+  log('--- GPS START ---', 'ok');
+}
+function stopGps() {
+  if (gpsWatchId != null) { navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId = null; }
+}
+function exportGpx() {
+  if (gpsBuffer.length === 0) return;
+  const pts = gpsBuffer.map(p => {
+    let s = '<trkpt lat="' + p.lat.toFixed(7) + '" lon="' + p.lon.toFixed(7) + '">';
+    if (p.ele != null) s += '<ele>' + p.ele.toFixed(1) + '</ele>';
+    s += '<time>' + p.time + '</time></trkpt>';
+    return s;
+  }).join('\n');
+  const gpx =
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<gpx version="1.1" creator="fl4obd" xmlns="http://www.topografix.com/GPX/1/1">\n' +
+    '<trk><name>fl4obd ' + new Date().toISOString() + '</name><trkseg>\n' +
+    pts + '\n</trkseg></trk>\n</gpx>\n';
+  const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = 'fl4obd_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.gpx';
+  a.click();
+  URL.revokeObjectURL(url);
+  log('GPX ' + gpsBuffer.length + ' pts 保存', 'ok');
+  gpsBuffer = [];
+}
+
+// 録画の開始/終了時に呼ぶ: 録画中はGPS収集、全録画停止でGPX書き出し
+function syncGpsRecording() {
+  if (recordingActive()) { if (gpsEnabled) startGps(); }
+  else { stopGps(); if (gpsEnabled) exportGpx(); }
+}
+
+function toggleGps() {
+  gpsEnabled = !gpsEnabled;
+  localStorage.setItem('gpsLog', gpsEnabled ? '1' : '0');
+  const btn = document.getElementById('gpsBtn');
+  if (btn) { btn.style.borderColor = gpsEnabled ? '#ffaa00' : '#1a3a5a';
+             btn.style.color       = gpsEnabled ? '#ffaa00' : '#2a5a7a'; }
+  log('GPS記録: ' + (gpsEnabled ? 'ON' : 'OFF'), 'ok');
+  if (gpsEnabled && recordingActive()) startGps();
+  else if (!gpsEnabled) stopGps();
+}
+
+// 起動時: localStorage からトグル状態を復元
+(function initGps() {
+  gpsEnabled = localStorage.getItem('gpsLog') === '1';
+  const btn = document.getElementById('gpsBtn');
+  if (btn && gpsEnabled) { btn.style.borderColor = '#ffaa00'; btn.style.color = '#ffaa00'; }
+})();
 
 // ─── SVGメーター描画ヘルパー ──────────────────────────────
 // 中心(cx,cy)、半径r、開始角deg_start〜終了角deg_end の弧パスを返す
