@@ -36,14 +36,6 @@ body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-he
 .log .e {color:#cc3333;}
 .log .ok{color:#22cc77;}
 .log .tx{color:#3377cc;}
-.log-btn{position:absolute;top:4px;right:5px;
-  padding:2px 7px;background:#0d1e30;border:1px solid #2a4a6a;
-  border-radius:4px;color:#3a7aaa;font-family:'Courier New',monospace;
-  font-size:9px;letter-spacing:1px;cursor:pointer;transition:all .15s;z-index:1;}
-.log-btn:hover{border-color:#4a9eff;color:#4a9eff;}
-.log-btn.rec{border-color:#cc3333;color:#cc3333;animation:blink 1s infinite;}
-.log-btn.rec:hover{border-color:#ff4444;color:#ff4444;}
-
 /* CONNECT */
 .conn-btn{width:100%;padding:10px;background:#0d1e30;border:1px solid #2a5a8c;
   border-radius:7px;color:#4a9eff;font-family:'Courier New',monospace;
@@ -270,7 +262,7 @@ body.landscape .meter-card {
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260711a</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260718a</span></div>
   <div class="hdr-r">
     <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
@@ -284,11 +276,11 @@ body.landscape .meter-card {
   <div class="log" id="logBox">
     <span style="color:#1a5a3a">▶ Web Bluetooth 準備完了 — Chrome + HTTPS必須</span><br>
   </div>
-  <button class="log-btn" id="recBtn" onclick="toggleRec()">● REC</button>
 </div>
 
+<button class="conn-btn" id="recBtn" onclick="toggleRec()">● REC</button>
+
 <div style="display:flex;gap:6px;margin-bottom:0;">
-  <button class="conn-btn" id="dataBtn" onclick="toggleDataRec()" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;">[ DATA ]</button>
   <button class="conn-btn" id="gpsBtn" onclick="toggleGps()" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;">[ GPS ]</button>
   <button class="conn-btn" id="demoBtn" onclick="toggleDemo()" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;">[ DEMO ]</button>
   <a href="viewer.html" target="_blank" class="conn-btn" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;text-decoration:none;display:flex;align-items:center;justify-content:center;">[ LOG VIEWER ]</a>
@@ -299,9 +291,6 @@ body.landscape .meter-card {
 // ─── Log ─────────────────────────────────────────────────
 let logBuffer = [];
 let logRecording = false;
-let dataBuffer = [];
-let dataRecording = false;
-let dataUpdated = false;
 let gpsEnabled = false;   // GPS(GPX)記録トグル。状態は localStorage 永続
 let gpsWatchId = null;    // watchPosition のID
 let gpsBuffer = [];       // {time(ISO), lat, lon, ele, spd, acc}
@@ -352,51 +341,10 @@ function toggleRec() {
   }
 }
 
-function appendDataRow() {
-  const n = (v, d) => isNaN(v) ? '' : v.toFixed(d);
-  dataBuffer.push([
-    new Date().toISOString(),
-    Math.round(D.engRot),
-    n(D.vsp, 1),
-    n(D.psys, 2),
-    n(D.peng, 2),
-    n(D.pbat, 2),
-    n(D.soc, 1),
-    n(systemVolt, 2),
-    (D.runMode >= 0 ? (MODE_LABELS[D.runMode] || ('0x'+D.runMode.toString(16))) : ''),
-  ].join(','));
-}
-
-function toggleDataRec() {
-  const btn = document.getElementById('dataBtn');
-  if (!dataRecording) {
-    dataBuffer = [];
-    dataRecording = true;
-    btn.textContent = '■ STOP';
-    btn.classList.add('rec');
-    log('--- DATA REC START ---', 'ok');
-    syncGpsRecording();
-  } else {
-    dataRecording = false;
-    btn.textContent = '[ DATA ]';
-    btn.classList.remove('rec');
-    syncGpsRecording();
-    if (dataBuffer.length === 0) return;
-    const header = 'timestamp,eng_rpm,vsp_kmh,psys_kW,peng_kW,pbat_kW,soc_pct,vsys_V,run_mode';
-    const blob = new Blob([header + '\n' + dataBuffer.join('\n')], { type: 'text/csv' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url;
-    a.download = 'fl4obd_data_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-}
-
 // ─── GPS (GPXトラック記録) ───────────────────────────────
-// トグルON時、録画(REC/DATA)中に watchPosition で座標を溜め、
+// トグルON時、REC録画中に watchPosition で座標を溜め、
 // 録画終了時に GPX を書き出す。時刻は toISOString() で他ログと共通。
-function recordingActive() { return logRecording || dataRecording; }
+function recordingActive() { return logRecording; }
 
 function onGpsFix(pos) {
   const c = pos.coords;
@@ -817,7 +765,6 @@ function splitFrames(hexStr) {
 // bytes[0]=0x41, bytes[1]=PID, bytes[2..]=data (0x55はパッド、無視)
 function decodeService01(bytes) {
   if (bytes[0] !== 0x41) return;
-  dataUpdated = true;
   const pid  = bytes[1];
   const d    = bytes; // d[2], d[3], ... がデータバイト
   // d[2]以降がデータバイト (スケッチのbuf[3]以降に対応)
@@ -871,7 +818,6 @@ function parse22_2920(hex) {
   D.pdrive = 0.000147 * drvTrq * vsp;                 // 車輪(TRC)出力 [kW]
   const isDirect = (mode === 50 || mode === 70);      // 直結のみエンジン分を加算(10進)
   D.psys = D.pdrive + (isDirect ? D.peng : 0);
-  dataUpdated = true;
 }
 
 // PID 9A マルチフレーム処理
@@ -999,9 +945,7 @@ function onRx(evt) {
     const block = parts[i];
     const preview = block.replace(/[\r\n]+/g, ' ').trim();
     if (preview) log('← ' + preview, 'ok');
-    dataUpdated = false;
     parseBlock(block);
-    if (dataUpdated && dataRecording) appendDataRow();
     if (pendingWait && block.includes(pendingWait.str)) pendingWait.resolve(block);
     gotResponse = true;
   }
