@@ -468,7 +468,7 @@ document.querySelectorAll('.spd[data-s]').forEach(b=>b.onclick=()=>{
   speed=+b.dataset.s; document.querySelectorAll('.spd[data-s]').forEach(x=>x.classList.remove('on')); b.classList.add('on');
 });
 const engBtn=document.getElementById('engBtn'), energyPanel=document.getElementById('energyPanel');
-engBtn.onclick=()=>{ drawSummary(); engBtn.classList.toggle('on', energyPanel.classList.toggle('on')); };
+engBtn.onclick=()=>{ drawSummary(); energyPanel.classList.toggle('on'); };
 energyPanel.onclick=e=>{ if(e.target===energyPanel) energyPanel.classList.remove('on'); };
 function tick(ts){
   if(playing){
