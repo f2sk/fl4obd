@@ -156,7 +156,7 @@ function parseFrames(text){
 // ═══ 状態 ═════════════════════════════════════════════════
 const FOLLOW_SPAN_M=700;   // ナビが常に映す実距離(m四方)。タイル画素数から初期ズーム算出
 let GPS=[], OBD=[], T0=0, T1=0, PT=0, playing=false, speed=1, lastRAF=0;
-let map1, map2, latlngs=[], cur1, cur2, futureCover1, futureCover2, lastCoverIdx=-1;
+let map1, map2, latlngs=[], cur1, cur2, futureCover1, futureCover2, bridgeCover1, bridgeCover2, lastCoverIdx=-1;
 let segMeta=[];                       // GPS点ごと {mode, spd}（フレーム最近傍）
 let SUM={};                           // 1走行サマリー(距離/時間/電費/エネルギー内訳)
 
@@ -207,11 +207,13 @@ function buildTrack(map){
   for(const r of runs) L.polyline(r.pts,{color:r.col,   weight:r.w,  opacity:1,   lineCap:'round',lineJoin:'round',interactive:false}).addTo(map);
 }
 function addMarkers(map){
-  const cover=L.polyline(latlngs,{color:'#0a0e14',weight:12,opacity:0.6,lineCap:'butt',lineJoin:'round',interactive:false}).addTo(map); // 未走行を暗く覆う(buttで後方はみ出し無し)
+  const co={color:'#0a0e14',weight:12,opacity:0.6,lineCap:'butt',lineJoin:'round',interactive:false};
+  const cover=L.polyline(latlngs,co).addTo(map);   // 未走行(次頂点→終点)を暗く覆う
+  const bridge=L.polyline([],co).addTo(map);       // 自車→次頂点の端数区間。毎フレーム更新で境界を自車に一致
   L.circleMarker(latlngs[0],{radius:5,color:'#2ecc71',fillColor:'#2ecc71',fillOpacity:1,weight:1,interactive:false}).addTo(map);            // 始点
   L.circleMarker(latlngs[latlngs.length-1],{radius:5,color:'#e74c3c',fillColor:'#e74c3c',fillOpacity:1,weight:1,interactive:false}).addTo(map); // 終点
   const cur=L.circleMarker(latlngs[0],{radius:6,color:'#fff',fillColor:'#4a9eff',fillOpacity:1,weight:2,interactive:false}).addTo(map);      // 現在地
-  return {cover,cur};
+  return {cover,bridge,cur};
 }
 function buildMaps(){
   latlngs=GPS.map(p=>[p.lat,p.lon]);
@@ -219,12 +221,12 @@ function buildMaps(){
   if(map1){ map1.remove(); map2.remove(); }
   // 俯瞰(固定)
   map1=L.map('map1',{zoomControl:false, attributionControl:false, preferCanvas:true}); tiles().addTo(map1);
-  buildTrack(map1); ({cover:futureCover1, cur:cur1}=addMarkers(map1));
+  buildTrack(map1); ({cover:futureCover1, bridge:bridgeCover1, cur:cur1}=addMarkers(map1));
   map1.fitBounds(L.latLngBounds(latlngs).pad(0.12));
   // ナビ 追従(ズーム可変)
   map2=L.map('map2',{attributionControl:false, zoomControl:false, preferCanvas:true}); tiles().addTo(map2);
   L.control.zoom({position:'topright'}).addTo(map2);   // 左上のナビタグと被らないよう右上へ
-  buildTrack(map2); ({cover:futureCover2, cur:cur2}=addMarkers(map2));
+  buildTrack(map2); ({cover:futureCover2, bridge:bridgeCover2, cur:cur2}=addMarkers(map2));
   map2.setView(latlngs[0],16);
   lastCoverIdx=-1;
   setTimeout(()=>{map1.invalidateSize();map2.invalidateSize();applyFollowZoom();},60);
@@ -334,11 +336,14 @@ function render(t){
   const pos=gpsAt(t); if(!pos) return;
   cur1.setLatLng([pos.lat,pos.lon]); cur2.setLatLng([pos.lat,pos.lon]);
   map2.setView([pos.lat,pos.lon], map2.getZoom(), {animate:false});
-  if(pos.i!==lastCoverIdx){                          // 未走行部(次の点→終点)を暗色で覆う。通過済みを覆わない
+  if(pos.i!==lastCoverIdx){                          // バルク: 次頂点→終点を暗色で覆う(頂点スナップ)
     const fut=latlngs.slice(pos.i+1);
     futureCover1.setLatLngs(fut); futureCover2.setLatLngs(fut);
     lastCoverIdx=pos.i;
   }
+  const nx=latlngs[pos.i+1];                          // ブリッジ: 自車→次頂点を毎フレーム覆い、境界を自車に一致(前後ズレ無し)
+  const bseg=nx?[[pos.lat,pos.lon],nx]:[];
+  bridgeCover1.setLatLngs(bseg); bridgeCover2.setLatLngs(bseg);
   const o=obdAt(t);
   if(o){
     const mR=o.modeR??o.mode;
