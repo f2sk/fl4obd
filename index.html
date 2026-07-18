@@ -21,13 +21,6 @@ body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-he
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 .stt{font-size:10px;letter-spacing:1px;color:#2a5a7a;}
 
-/* ROTATE BTN */
-.rot-btn{padding:2px 8px;background:#0d1520;border:1px solid #1a3a5a;
-  border-radius:4px;color:#2a5a7a;font-family:'Courier New',monospace;
-  font-size:9px;cursor:pointer;transition:all .15s;letter-spacing:1px;}
-.rot-btn:hover{border-color:#4a9eff;color:#4a9eff;}
-.rot-btn.active{border-color:#ffaa00;color:#ffaa00;}
-
 /* LOG */
 .log-wrap{position:relative;margin-bottom:8px;}
 .log{background:#040810;border:1px solid #1a2a3a;border-radius:6px;
@@ -80,9 +73,23 @@ body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-he
   position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;}
 .m-svg{position:absolute;top:0;left:0;width:100%;height:100%;}
 
-/* ── LANDSCAPE MODE: メーターカードだけ90度回転 ─────────── */
-body.landscape .meter-card {
-  transform: rotate(90deg);
+/* ── 強制ポートレート ─────────────────────────────────────
+   回転フリー端末を横に向けても縦表示を維持する。
+   Orientation Lock API は iOS非対応/要フルスクリーンで実用外のため CSS で対処:
+   タッチ端末が横向きのとき body を反回転し、縦アスペクトのまま描画する。 */
+@media (orientation: landscape) and (pointer: coarse) {
+  html { overflow-x: hidden; }
+  body {
+    position: absolute;
+    top: 100vh;
+    left: 0;
+    width: 100vh;          /* 縦画面の幅 = 端末の短辺 */
+    height: 100vw;         /* 縦画面の高さ = 端末の長辺 */
+    transform: rotate(-90deg);
+    transform-origin: left top;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
 }
 
 /* VIEW TABS (ゲージ / フロー) */
@@ -262,9 +269,8 @@ body.landscape .meter-card {
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260718a</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260718b</span></div>
   <div class="hdr-r">
-    <button class="rot-btn" id="rotBtn" onclick="toggleLandscape()">⟳ 横</button>
     <span class="stt" id="sttTxt">DISCONNECTED</span>
     <div class="dot" id="dot"></div>
   </div>
@@ -1351,37 +1357,6 @@ function toggleDemo() {
 }
 
 // ─── 画面回転 ──────────────────────────────────────────────
-let isLandscape = false;
-
-function applyOrientation(landscape) {
-  isLandscape = landscape;
-  document.body.classList.toggle('landscape', landscape);
-  const btn = document.getElementById('rotBtn');
-  if (landscape) {
-    btn.textContent = '⟳ 縦';
-    btn.classList.add('active');
-  } else {
-    btn.textContent = '⟳ 横';
-    btn.classList.remove('active');
-  }
-}
-
-function toggleLandscape() {
-  applyOrientation(!isLandscape);
-}
-
-// 端末の向きに自動追従
-function onOrientationChange() {
-  const angle = screen.orientation ? screen.orientation.angle : window.orientation;
-  applyOrientation(Math.abs(angle) === 90);
-}
-
-if (screen.orientation) {
-  screen.orientation.addEventListener('change', onOrientationChange);
-} else {
-  window.addEventListener('orientationchange', onOrientationChange);
-}
-
 // 起動時はデモOFF
 setInterval(render, 200);
 </script>
