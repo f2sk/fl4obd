@@ -554,13 +554,12 @@ energyPanel.onclick=e=>{ if(e.target===energyPanel) energyPanel.classList.remove
 const graphBtn=document.getElementById('graphBtn'), graphPanel=document.getElementById('graphPanel'), graphSvg=document.getElementById('graphSvg');
 graphBtn.onclick=()=>{ graphOpen=!graphPanel.classList.contains('on'); if(graphOpen){ vT0=T0; vT1=T1; drawGraph(); } graphPanel.classList.toggle('on', graphOpen); };
 graphPanel.onclick=e=>{ if(e.target===graphPanel){ graphPanel.classList.remove('on'); graphOpen=false; } };
-// 1本指=タップ/ドラッグでシーク、2本指=左右ピンチで時間軸ズーム(＋パン)
-const gPtr=new Map(); let gseek=false, gPinch=null;
+// グラフは左右ピンチ(2本指)で時間軸ズーム＋パンのみ。時刻移動は下の再生バーで行う(赤線は再生に追従、手動ドラッグ不可)
+const gPtr=new Map(); let gPinch=null;
 const gSvgX=cx=>{ const r=graphSvg.getBoundingClientRect(); return (cx-r.left)/r.width*600; };
-function gSeekAt(ev){ const fr=Math.max(0,Math.min(1,(gSvgX(ev.clientX)-GX0)/GPW)); PT=vT0+fr*(vT1-vT0); render(PT); }
 function gPinchSt(){ const xs=[...gPtr.values()].map(gSvgX); const a=Math.min(xs[0],xs[1]), b=Math.max(xs[0],xs[1]); return {dist:Math.max(1,b-a), mid:(a+b)/2}; }
 graphSvg.addEventListener('pointerdown',e=>{ gPtr.set(e.pointerId,e.clientX); try{graphSvg.setPointerCapture(e.pointerId);}catch(_){}
-  if(gPtr.size===1){ gseek=true; gSeekAt(e); } else { gseek=false; gPinch=gPinchSt(); } });
+  if(gPtr.size===2) gPinch=gPinchSt(); });
 graphSvg.addEventListener('pointermove',e=>{ if(!gPtr.has(e.pointerId)) return; gPtr.set(e.pointerId,e.clientX);
   if(gPtr.size>=2){ const stt=gPinchSt();
     if(gPinch){ const span=vT1-vT0, midT=vT0+(gPinch.mid-GX0)/GPW*span;   // 直前の指中心が指す時刻
@@ -568,9 +567,8 @@ graphSvg.addEventListener('pointermove',e=>{ if(!gPtr.has(e.pointerId)) return; 
       let v0=midT-(stt.mid-GX0)/GPW*ns, v1=v0+ns;                          // その時刻を現在の指中心へ(ズーム＋パン)
       if(v0<T0){v0=T0;v1=T0+ns;} if(v1>T1){v1=T1;v0=T1-ns;}
       vT0=v0; vT1=v1; drawGraph(); }
-    gPinch=stt; }
-  else if(gseek){ gSeekAt(e); } });
-function gUp(e){ gPtr.delete(e.pointerId); if(gPtr.size<2) gPinch=null; if(gPtr.size===0) gseek=false; }
+    gPinch=stt; } });
+function gUp(e){ gPtr.delete(e.pointerId); if(gPtr.size<2) gPinch=null; }
 graphSvg.addEventListener('pointerup',gUp);
 graphSvg.addEventListener('pointercancel',gUp);
 function tick(ts){
