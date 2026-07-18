@@ -386,22 +386,37 @@ function drawSummary(){
     metric('平均車速', s.kmh.toFixed(0)+' km/h')+
     metric('電費',    s.effWh.toFixed(0)+' Wh/km', s.effKm.toFixed(1)+' km/kWh');
   const svg=document.getElementById('energySvg'); while(svg.firstChild) svg.removeChild(svg.firstChild);
-  const CT='Courier New', netUse=s.netUse, source=s.source, regen=s.regen;
-  const X=150, W=94, top=44, bot=222, H=bot-top, pxk=H/(netUse||1);
-  const srcH=source*pxk, regH=regen*pxk;
-  fEl('rect',{x:X-W/2, y:bot-srcH,      width:W, height:srcH, fill:'#e8a33a', rx:3},svg);  // 源
-  fEl('rect',{x:X-W/2, y:bot-srcH-regH, width:W, height:regH, fill:FX_R,      rx:3},svg);  // 回生
-  const seg=(cy,h,name,v,col)=>{ if(v<=0) return;
-    if(h>=26){ fEl('text',{x:X,y:cy-4,'text-anchor':'middle','font-size':11,'font-family':CT,fill:'#06121c'},svg).textContent=name;
-               fEl('text',{x:X,y:cy+12,'text-anchor':'middle','font-size':13,'font-weight':'bold','font-family':CT,fill:'#06121c'},svg).textContent=v.toFixed(2); }
-    else fEl('text',{x:X+W/2+7,y:cy,'dominant-baseline':'middle','font-size':11,'font-weight':'bold','font-family':CT,fill:col},svg).textContent=name+' '+v.toFixed(2);
+  const CT='Courier New', netUse=s.netUse, drive=s.drive, aux=s.aux, source=s.source, regen=s.regen;
+  const top=54, bot=224, H=bot-top, pxk=H/(netUse||1), bw=58, LX=76, RX=166;
+  const yTop=bot-netUse*pxk;
+  const rect=(x,y,h,fill)=>{ if(h>0.3) fEl('rect',{x,y,width:bw,height:h,fill,rx:3},svg); };
+  const seg=(x,yt,h,name,v,col)=>{ if(v<=0) return; const cy=yt+h/2;
+    if(h>=26){ fEl('text',{x:x+bw/2,y:cy-3,'text-anchor':'middle','font-size':10,'font-family':CT,fill:'#06121c'},svg).textContent=name;
+               fEl('text',{x:x+bw/2,y:cy+12,'text-anchor':'middle','font-size':13,'font-weight':'bold','font-family':CT,fill:'#06121c'},svg).textContent=v.toFixed(2); }
+    else fEl('text',{x:x+bw+5,y:cy,'dominant-baseline':'middle','font-size':10,'font-weight':'bold','font-family':CT,fill:col},svg).textContent=name+' '+v.toFixed(2);
   };
-  seg(bot-srcH/2,      srcH, 'ENG+電池', source, '#e8a33a');
-  seg(bot-srcH-regH/2, regH, '回生',     regen,  FX_R);
-  fEl('text',{x:X,y:bot-srcH-regH-10,'text-anchor':'middle','font-size':13,'font-weight':'bold','font-family':CT,fill:'#cfe'},svg).textContent='正味消費 '+netUse.toFixed(2)+' kWh';
-  fEl('text',{x:X-W/2-7,y:bot-srcH/2,'text-anchor':'end','dominant-baseline':'middle','font-size':10,'font-family':CT,fill:'#e8a33a'},svg).textContent='電費↗';
-  fEl('text',{x:X,y:244,'text-anchor':'middle','font-size':10,'font-family':CT,fill:'#8aa0b4'},svg).textContent='正味消費 = ENG+電池（実消費）+ 回生';
-  fEl('text',{x:X,y:258,'text-anchor':'middle','font-size':10,'font-family':CT,fill:'#7a95ad'},svg).textContent='回生 = ガソリン車に無い取り戻し';
+  // 左: 消費 = 駆動 + AUX
+  const dH=drive*pxk, aH=aux*pxk;
+  rect(LX, bot-dH,    dH, FX_M);            // 駆動
+  rect(LX, bot-dH-aH, aH, FX_A);            // AUX
+  seg(LX, bot-dH,     dH, '駆動', drive, FX_M);
+  seg(LX, bot-dH-aH,  aH, 'AUX',  aux,   FX_A);
+  // 右: 上端(=消費)から回生を積み下げ、残り0〜が電費
+  const sH=source*pxk, rH=regen*pxk;
+  rect(RX, bot-sH,    sH, '#5b8fd6');       // 電費(0〜下限)
+  rect(RX, bot-sH-rH, rH, FX_R);            // 回生(上端から下げる)
+  seg(RX, bot-sH,     sH, '電費', source, '#5b8fd6');
+  seg(RX, bot-sH-rH,  rH, '回生', regen,  FX_R);
+  // 上端をつなぐ点線(=両バー同高=消費)
+  fEl('line',{x1:LX,y1:yTop,x2:RX+bw,y2:yTop,stroke:'#7a95ad','stroke-width':1,'stroke-dasharray':'3 3'},svg);
+  fEl('text',{x:(LX+RX+bw)/2,y:yTop-7,'text-anchor':'middle','font-size':11,'font-weight':'bold','font-family':CT,fill:'#cfe'},svg).textContent='消費 '+netUse.toFixed(2)+' kWh';
+  // 電費上限の点線
+  fEl('line',{x1:RX-6,y1:bot-sH,x2:RX+bw+8,y2:bot-sH,stroke:'#5b8fd6','stroke-width':1,'stroke-dasharray':'2 2'},svg);
+  // ベースライン
+  fEl('line',{x1:LX-6,y1:bot,x2:RX+bw+8,y2:bot,stroke:'#3a4a5a','stroke-width':1},svg);
+  fEl('text',{x:LX+bw/2,y:bot+15,'text-anchor':'middle','font-size':10,'font-family':CT,fill:'#8aa0b4'},svg).textContent='消費';
+  fEl('text',{x:RX+bw/2,y:bot+15,'text-anchor':'middle','font-size':10,'font-family':CT,fill:'#8aa0b4'},svg).textContent='内訳';
+  fEl('text',{x:150,y:bot+32,'text-anchor':'middle','font-size':10,'font-family':CT,fill:'#7a95ad'},svg).textContent='消費 − 回生 = 電費（実消費）';
 }
 
 // ═══ 再生 ═════════════════════════════════════════════════
