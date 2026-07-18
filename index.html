@@ -269,7 +269,7 @@ body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-he
 
 <!-- CONTROLS: 接続・ログ・DEMO -->
 <div class="hdr">
-  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260718b</span></div>
+  <div class="logo">FL4 OBD MONITOR <span style="font-size:0.6em;opacity:0.6">v20260718c</span></div>
   <div class="hdr-r">
     <span class="stt" id="sttTxt">DISCONNECTED</span>
     <div class="dot" id="dot"></div>
@@ -618,6 +618,28 @@ function setView(v){
   document.getElementById('tabFlow').classList.toggle('active',  v==='flow');
   if (v==='flow') drawFlow();
 }
+
+// ─── スワイプで GAUGE ⇄ FLOW 切替（タブと併用） ─────────────
+(function(){
+  const VIEWS = ['gauge','flow'];
+  let x0=null, y0=null;
+  function onStart(e){ const t=e.changedTouches[0]; x0=t.clientX; y0=t.clientY; }
+  function onEnd(e){
+    if(x0==null) return;
+    const t=e.changedTouches[0], dx=t.clientX-x0, dy=t.clientY-y0;
+    x0=null;
+    if(Math.abs(dx)<50 || Math.abs(dx)<Math.abs(dy)*1.2) return;  // 横方向の明確なスワイプのみ
+    const i=VIEWS.indexOf(currentView);
+    const ni = dx<0 ? i+1 : i-1;                                  // 左スワイプ=次(FLOW), 右=前(GAUGE)
+    if(ni>=0 && ni<VIEWS.length && ni!==i) setView(VIEWS[ni]);
+  }
+  for(const id of ['gaugeView','flowView']){
+    const el=document.getElementById(id);
+    el.addEventListener('touchstart', onStart, {passive:true});
+    el.addEventListener('touchend',   onEnd,   {passive:true});
+  }
+})();
+
 const FNS='http://www.w3.org/2000/svg';
 function fEl(tag,attrs,parent){const e=document.createElementNS(FNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
 const FX_M='#ff9a44', FX_E='#00e5ff', FX_R='#25e0a0', FX_A='#c9a0ff';  // 機械/電気/回生/補機
