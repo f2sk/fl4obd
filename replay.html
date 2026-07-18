@@ -207,7 +207,7 @@ function buildTrack(map){
   for(const r of runs) L.polyline(r.pts,{color:r.col,   weight:r.w,  opacity:1,   lineCap:'round',lineJoin:'round',interactive:false}).addTo(map);
 }
 function addMarkers(map){
-  const cover=L.polyline(latlngs,{color:'#0a0e14',weight:12,opacity:0.6,lineCap:'round',lineJoin:'round',interactive:false}).addTo(map); // 未走行を暗く覆う
+  const cover=L.polyline(latlngs,{color:'#0a0e14',weight:12,opacity:0.6,lineCap:'butt',lineJoin:'round',interactive:false}).addTo(map); // 未走行を暗く覆う(buttで後方はみ出し無し)
   L.circleMarker(latlngs[0],{radius:5,color:'#2ecc71',fillColor:'#2ecc71',fillOpacity:1,weight:1,interactive:false}).addTo(map);            // 始点
   L.circleMarker(latlngs[latlngs.length-1],{radius:5,color:'#e74c3c',fillColor:'#e74c3c',fillOpacity:1,weight:1,interactive:false}).addTo(map); // 終点
   const cur=L.circleMarker(latlngs[0],{radius:6,color:'#fff',fillColor:'#4a9eff',fillOpacity:1,weight:2,interactive:false}).addTo(map);      // 現在地
@@ -334,8 +334,8 @@ function render(t){
   const pos=gpsAt(t); if(!pos) return;
   cur1.setLatLng([pos.lat,pos.lon]); cur2.setLatLng([pos.lat,pos.lon]);
   map2.setView([pos.lat,pos.lon], map2.getZoom(), {animate:false});
-  if(pos.i!==lastCoverIdx){                          // 未走行部(現在地→終点)を暗色で覆う
-    const fut=latlngs.slice(pos.i);
+  if(pos.i!==lastCoverIdx){                          // 未走行部(次の点→終点)を暗色で覆う。通過済みを覆わない
+    const fut=latlngs.slice(pos.i+1);
     futureCover1.setLatLngs(fut); futureCover2.setLatLngs(fut);
     lastCoverIdx=pos.i;
   }
