@@ -452,7 +452,7 @@ function drawModes(){
     if(wD>0.3) fEl('rect',{x:xD0,y:yD1,width:wD,height:yD2-yD1,fill:c},svg);   // 距離バー(下)
     const pctT=tv/totT*100, pctD=dv/totD*100;
     if(wT>=18) inbar((xT0+xT1)/2, 25, pctT.toFixed(0)+'%', (tv*60).toFixed(0)+'min');  // 時間: %/min
-    if(wD>=18) inbar((xD0+xD1)/2, 90, pctD.toFixed(0)+'%', dv.toFixed(0)+'km');         // 距離: %/km
+    if(wD>=18) inbar((xD0+xD1)/2, 90, pctD.toFixed(0)+'%', dv.toFixed(1)+'km');         // 距離: %/km
     if(pctT>=4||pctD>=4)                                                        // モード名は中央
       fEl('text',{x:((xT0+xT1)/2+(xD0+xD1)/2)/2,y:62,'text-anchor':'middle','font-size':11,'font-weight':'bold','font-family':CT,fill:'#e6eef7'},svg).textContent=n;
     cxT=xT1; cxD=xD1;
