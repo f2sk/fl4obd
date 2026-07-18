@@ -326,9 +326,10 @@ function drawFlow(){
 
 // ═══ 描画 ═════════════════════════════════════════════════
 function fmtT(ms){ const s=Math.max(0,(ms-T0)/1000); const m=Math.floor(s/60); return (''+m).padStart(2,'0')+':'+(''+Math.floor(s%60)).padStart(2,'0'); }
-// 絶対時刻: ブラウザのローカルTZで表示＋TZ略称(JST等)併記
+// 絶対時刻: ブラウザのローカルTZで 日付+時刻 を表示＋TZ略称(JST等)併記
 let TZ='';
-function fmtAbs(ms){ return new Date(ms).toLocaleTimeString('ja-JP',{hour12:false}) + (TZ?' '+TZ:''); }
+function fmtAbs(ms){ const d=new Date(ms);
+  return d.toLocaleDateString('sv-SE')+' '+d.toLocaleTimeString('ja-JP',{hour12:false})+(TZ?' '+TZ:''); }
 function render(t){
   const pos=gpsAt(t); if(!pos) return;
   cur1.setLatLng([pos.lat,pos.lon]); cur2.setLatLng([pos.lat,pos.lon]);
