@@ -53,6 +53,11 @@
   #sumMetrics .mt b { color:#cfe; font-size:17px; font-variant-numeric:tabular-nums; }
   #sumMetrics .mt i { display:block; color:#5a8; font-size:10px; font-style:normal; margin-top:1px; }
   #energySvg { width:100%; height:auto; display:block; }
+  #sumMetrics .mt.wide { grid-column:1/-1; }
+  #modeSection { margin-top:12px; }
+  #modeSection .mlabel { color:#7a95ad; font-size:10px; margin-bottom:4px; text-align:center; }
+  #modeBar { display:flex; height:26px; border-radius:6px; overflow:hidden; border:1px solid #1c2c3c; }
+  #modeBar > div { display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:bold; color:#06121c; font-family:'Courier New',monospace; white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -95,6 +100,7 @@
     <div id="sumTitle">走行サマリー</div>
     <div id="sumMetrics"></div>
     <svg id="energySvg" viewBox="0 0 300 262" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="modeSection"><div class="mlabel">走行中のモード配分（時間）</div><div id="modeBar"></div></div>
   </div></div>
 </div>
 
@@ -361,8 +367,8 @@ function computeSummary(){
     const s=Math.sin(dp/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dl/2)**2;
     d+=2*R*Math.asin(Math.sqrt(s)); }
   const km=d/1000, min=(T1-T0)/60000;
-  // エネルギー積算
-  let drive=0, aux=0, engE=0, battNet=0;
+  // エネルギー積算 ＋ 走行中時間/モード配分
+  let drive=0, aux=0, engE=0, battNet=0, moveHr=0, ev=0, ser=0, dir=0;
   for(let i=0;i<OBD.length-1;i++){
     let dt=(OBD[i+1].t-OBD[i].t)/3600000; if(dt<=0) continue; if(dt>3/3600) dt=3/3600; // 停止/欠測の穴は3秒で頭打ち
     const a=OBD[i], b=OBD[i+1];
@@ -370,21 +376,33 @@ function computeSummary(){
     aux    +=0.5*(auxOf(a)+auxOf(b))*dt;                        // AUX/AC
     engE   +=0.5*(Math.max(a.peng,0)+Math.max(b.peng,0))*dt;   // エンジン投入
     battNet+=0.5*(a.pbat+b.pbat)*dt;                            // 電池 正味放電(+)/充電(-)
+    if(a.vsp>=1){ moveHr+=dt;                                   // 走行中(vsp>=1)のモード滞在時間
+      const mr=a.modeR??a.mode;
+      if(mr===20) ev+=dt; else if(mr===40) ser+=dt; else if(mr===50||mr===70) dir+=dt; }
   }
   const netUse=drive+aux;                 // 正味の消費エネルギー(出力側)
   const source=engE+battNet;              // 電費積算(ソース側=ENG+電池正味)
   const regen=Math.max(0, netUse-source); // 回生寄与 = 出力が源を上回った分
-  SUM={ km, min, kmh: min>0?km/(min/60):0, drive, aux, netUse, source, regen,
-        effWh: km>0?source/km*1000:0, effKm: source>0?km/source:0 };
+  const hr=min/60;
+  SUM={ km, min, moveMin: moveHr*60, kmhAll: hr>0?km/hr:0, kmhMove: moveHr>0?km/moveHr:0,
+        drive, aux, netUse, source, regen,
+        effWh: km>0?source/km*1000:0, effKm: source>0?km/source:0,
+        modeShare:{ev,ser,dir} };
 }
-function metric(k,v,sub){ return `<div class="mt"><span>${k}</span><b>${v}</b>${sub?`<i>${sub}</i>`:''}</div>`; }
+function metric(k,v,sub,wide){ return `<div class="mt${wide?' wide':''}"><span>${k}</span><b>${v}</b>${sub?`<i>${sub}</i>`:''}</div>`; }
 function drawSummary(){
   const s=SUM;
   document.getElementById('sumMetrics').innerHTML =
     metric('走行距離', s.km.toFixed(1)+' km')+
-    metric('時間',    s.min.toFixed(0)+' 分')+
-    metric('平均車速', s.kmh.toFixed(0)+' km/h')+
+    metric('時間',    s.min.toFixed(0)+' 分',    '(走行 '+s.moveMin.toFixed(0)+' 分)')+
+    metric('平均車速', s.kmhAll.toFixed(0)+' km/h', '(走行中 '+s.kmhMove.toFixed(0)+' km/h)')+
     metric('電費',    s.effWh.toFixed(0)+' Wh/km', s.effKm.toFixed(1)+' km/kWh');
+  // 走行中モード配分(横100%積み上げ)
+  const ms=s.modeShare, tot=(ms.ev+ms.ser+ms.dir)||1;
+  document.getElementById('modeBar').innerHTML =
+    [['EV',ms.ev,'#00e5ff'],['直列',ms.ser,'#4a9eff'],['直結',ms.dir,'#ff9a44']]
+    .map(([n,v,c])=>{ const pct=v/tot*100; if(pct<0.5) return '';
+      return `<div style="flex:0 0 ${pct}%;background:${c}">${pct>=12?n+' '+pct.toFixed(0)+'%':''}</div>`; }).join('');
   const svg=document.getElementById('energySvg'); while(svg.firstChild) svg.removeChild(svg.firstChild);
   const CT='Courier New', netUse=s.netUse, drive=s.drive, aux=s.aux, source=s.source, regen=s.regen;
   const top=54, bot=224, H=bot-top, pxk=H/(netUse||1), bw=58, LX=76, RX=166;
