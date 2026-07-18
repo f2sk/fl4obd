@@ -326,6 +326,9 @@ function drawFlow(){
 
 // ═══ 描画 ═════════════════════════════════════════════════
 function fmtT(ms){ const s=Math.max(0,(ms-T0)/1000); const m=Math.floor(s/60); return (''+m).padStart(2,'0')+':'+(''+Math.floor(s%60)).padStart(2,'0'); }
+// 絶対時刻: ブラウザのローカルTZで表示＋TZ略称(JST等)併記
+let TZ='';
+function fmtAbs(ms){ return new Date(ms).toLocaleTimeString('ja-JP',{hour12:false}) + (TZ?' '+TZ:''); }
 function render(t){
   const pos=gpsAt(t); if(!pos) return;
   cur1.setLatLng([pos.lat,pos.lon]); cur2.setLatLng([pos.lat,pos.lon]);
@@ -345,7 +348,7 @@ function render(t){
     document.getElementById('hud1').textContent=hud;
     document.getElementById('hud2').textContent=hud;
   }
-  document.getElementById('tlabel').textContent=fmtT(t)+' / '+fmtT(T1);
+  document.getElementById('tlabel').textContent=fmtAbs(t)+'  '+fmtT(t)+'/'+fmtT(T1);
   document.getElementById('seek').value=Math.round((t-T0)/(T1-T0)*1000)||0;
 }
 
@@ -496,6 +499,7 @@ function start(gpxText, txtText){
   if(!OBD.length){ document.getElementById('loadMsg').textContent='フレームログに622920がありません'; return; }
   T0=Math.min(GPS[0].t, OBD[0].t); T1=Math.max(GPS[GPS.length-1].t, OBD[OBD.length-1].t); PT=T0;
   resolveModes(); computeSummary();
+  try{ const p=new Intl.DateTimeFormat('en-US',{timeZoneName:'short',hour:'2-digit'}).formatToParts(new Date(T0)).find(x=>x.type==='timeZoneName'); TZ=p?p.value:''; }catch(e){ TZ=''; }
   document.getElementById('loader').style.display='none';
   document.getElementById('app').classList.add('on');
   buildMaps(); render(PT); requestWakeLock();
