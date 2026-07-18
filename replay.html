@@ -79,7 +79,7 @@
 <div id="app">
   <div class="tile" id="s2"><div class="map" id="map2"></div><div class="tag">ナビ</div><div class="hud" id="hud2"></div></div>
   <div class="tile" id="s1"><div class="map" id="map1"></div><div class="tag">俯瞰</div><div class="hud" id="hud1"></div>
-    <div class="mlegend"><i style="color:#00e5ff">■</i>EV <i style="color:#4a9eff">■</i>直列 <i style="color:#ff9a44">■</i>直結<br><span style="color:#7a95ad">線の太さ = 車速（太いほど速い）</span></div>
+    <div class="mlegend"><i style="color:#00e5ff">■</i>EV <i style="color:#4a9eff">■</i>SERIES <i style="color:#ff9a44">■</i>DIRECT<br><span style="color:#7a95ad">線の太さ = 車速（太いほど速い）</span></div>
   </div>
   <div class="tile" id="s3">
     <div class="tag">パワーフロー</div>
@@ -439,7 +439,7 @@ function drawModes(){
   const ms=SUM.modeShare, md=SUM.modeDist;
   const svg=document.getElementById('modeSvg'); while(svg.firstChild) svg.removeChild(svg.firstChild);
   const CT='Courier New';
-  const parts=[['EV',ms.ev,md.ev,'#00e5ff'],['直列',ms.ser,md.ser,'#4a9eff'],['直結',ms.dir,md.dir,'#ff9a44']];
+  const parts=[['EV',ms.ev,md.ev,'#00e5ff'],['SERIES',ms.ser,md.ser,'#4a9eff'],['DIRECT',ms.dir,md.dir,'#ff9a44']];
   const totT=(ms.ev+ms.ser+ms.dir)||1, totD=(md.ev+md.ser+md.dir)||1;
   const X0=6, W=288, yT1=14, yT2=37, yD1=79, yD2=102;
   fEl('text',{x:X0,y:11,'font-size':9,'font-family':CT,fill:'#8aa0b4'},svg).textContent='時間';
