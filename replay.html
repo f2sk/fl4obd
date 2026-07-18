@@ -43,8 +43,11 @@
   .mlegend { position:absolute; bottom:4px; right:5px; z-index:500; background:#000a; padding:3px 7px; border-radius:4px; font-size:9px; line-height:1.6; color:#9ab; pointer-events:none; white-space:nowrap; }
   .mlegend i { font-style:normal; font-weight:bold; }
   #engBtn { cursor:pointer; }
-  #energyPanel { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:#000b; z-index:1000; padding:16px; }
-  #energyPanel.on { display:flex; }
+  /* フローティングパネルはタイル行(1-2)だけを覆い、最下段の再生バー(行3)は覆わない */
+  #energyPanel, #graphPanel { grid-column:1/-1; grid-row:1/3; display:none; align-items:center; justify-content:center; background:#000b; z-index:1000; padding:12px; }
+  #energyPanel.on, #graphPanel.on { display:flex; }
+  #graphCard { background:#0d1420; border:1px solid #2a4a66; border-radius:12px; padding:8px 10px; width:min(97vw,600px); max-height:100%; overflow:auto; }
+  #graphSvg { width:100%; height:auto; display:block; touch-action:none; }
   #sumCard { background:#0d1420; border:1px solid #2a4a66; border-radius:12px; padding:14px 16px; width:min(92vw,360px); max-height:94%; overflow:auto; }
   #sumTitle { text-align:center; color:#cfe; font-weight:bold; font-size:15px; margin-bottom:10px; letter-spacing:1px; }
   #sumMetrics { display:grid; grid-template-columns:1fr 1fr; gap:8px 10px; margin-bottom:4px; }
@@ -93,8 +96,10 @@
     <span class="spd" data-s="5">5x</span>
     <span class="spd" data-s="10">10x</span>
     <span class="spd" id="engBtn">📊 サマリー</span>
+    <span class="spd" id="graphBtn">📈 グラフ</span>
     <span id="tlabel">--:-- / --:--</span>
   </div>
+  <div id="graphPanel"><div id="graphCard"><svg id="graphSvg" viewBox="0 0 600 384" preserveAspectRatio="xMidYMid meet"></svg></div></div>
   <div id="energyPanel"><div id="sumCard">
     <div id="sumTitle">走行サマリー</div>
     <div id="sumMetrics"></div>
@@ -123,8 +128,8 @@ function reassemble(line){
 function parseGpx(text){
   const pts=[];
   text.replace(/<trkpt\b([^>]*)>([\s\S]*?)<\/trkpt>/g,(_,attr,body)=>{
-    const la=/lat="([-\d.]+)"/.exec(attr), lo=/lon="([-\d.]+)"/.exec(attr), tm=/<time>([^<]+)<\/time>/.exec(body);
-    if(la&&lo&&tm){ const t=Date.parse(tm[1]); if(!isNaN(t)) pts.push({t,lat:+la[1],lon:+lo[1]}); }
+    const la=/lat="([-\d.]+)"/.exec(attr), lo=/lon="([-\d.]+)"/.exec(attr), tm=/<time>([^<]+)<\/time>/.exec(body), el=/<ele>([-\d.]+)<\/ele>/.exec(body);
+    if(la&&lo&&tm){ const t=Date.parse(tm[1]); if(!isNaN(t)) pts.push({t,lat:+la[1],lon:+lo[1],ele:el?+el[1]:null}); }
   });
   pts.sort((a,b)=>a.t-b.t); return pts;
 }
@@ -355,6 +360,7 @@ function render(t){
     document.getElementById('hud2').textContent=hud;
   }
   document.getElementById('tlabel').textContent=fmtAbs(t)+'  '+fmtT(t)+'/'+fmtT(T1);
+  if(graphOpen && gCursor){ const cx=gXAt(t); gCursor.setAttribute('x1',cx); gCursor.setAttribute('x2',cx); }  // グラフ縦カーソル同期
   document.getElementById('seek').value=Math.round((t-T0)/(T1-T0)*1000)||0;
 }
 
@@ -468,6 +474,61 @@ function drawModes(){
   }
 }
 
+// ═══ グラフ (時系列: モード/標高/勾配/車速/足軸P・電池P/ENGrpm) ═══
+const GX0=46, GX1=592, GPW=GX1-GX0;
+const gXAt=t=>GX0+(t-T0)/((T1-T0)||1)*GPW;
+const gHav=(a,b)=>{const R=6371000,rad=x=>x*Math.PI/180;const dp=rad(b.lat-a.lat),dl=rad(b.lon-a.lon);const s=Math.sin(dp/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dl/2)**2;return 2*R*Math.asin(Math.sqrt(s));};
+let graphOpen=false, gCursor=null, gCurTop=14, gCurBot=360;
+function drawGraph(){
+  const svg=document.getElementById('graphSvg'); while(svg.firstChild) svg.removeChild(svg.firstChild);
+  const CT='Courier New', el=(t,a)=>fEl(t,a,svg);
+  const fmtNum=v=>Math.abs(v)>=100?(''+Math.round(v)):(''+(Math.round(v*10)/10));
+  // 勾配: 標高の~40m基線スロープ(生GPS標高のノイズを平滑)
+  const cum=[0]; for(let i=1;i<GPS.length;i++) cum[i]=cum[i-1]+gHav(GPS[i-1],GPS[i]);
+  const eleSm=GPS.map((p,i)=>{ if(p.ele==null) return null; let s=0,n=0;   // 標高を距離窓±30mで平滑(GPS標高のスパイク除去)
+    for(let j=i;j>=0&&cum[i]-cum[j]<=30;j--){ if(GPS[j].ele!=null){s+=GPS[j].ele;n++;} }
+    for(let j=i+1;j<GPS.length&&cum[j]-cum[i]<=30;j++){ if(GPS[j].ele!=null){s+=GPS[j].ele;n++;} }
+    return n?s/n:p.ele; });
+  const gradPts=GPS.map((p,i)=>{ let j=i; while(j>0&&cum[i]-cum[j]<60)j--; const dd=cum[i]-cum[j]; const de=(eleSm[i]!=null&&eleSm[j]!=null)?eleSm[i]-eleSm[j]:0; return {t:p.t,v:dd>1?de/dd*100:0}; });  // 60m基線スロープ
+  const elePts=GPS.filter(p=>p.ele!=null).map(p=>({t:p.t,v:p.ele}));
+  const spdPts=OBD.map(o=>({t:o.t,v:o.vsp})), psysPts=OBD.map(o=>({t:o.t,v:o.psys}));
+  const pbatPts=OBD.map(o=>({t:o.t,v:o.pbat})), rpmPts=OBD.map(o=>({t:o.t,v:o.rpm}));
+  let y=14;
+  // モード帯(連続runをまとめて矩形)
+  { const h=16, yt=y; el('rect',{x:GX0,y:yt,width:GPW,height:h,fill:'#0a121c',stroke:'#1c2c3c','stroke-width':1});
+    let i=0; while(i<OBD.length-1){ const m=(OBD[i].modeR??OBD[i].mode); let j=i;
+      while(j+1<OBD.length && (OBD[j+1].modeR??OBD[j+1].mode)===m) j++;
+      const x0=gXAt(OBD[i].t), x1=gXAt(OBD[Math.min(j+1,OBD.length-1)].t);
+      el('rect',{x:x0,y:yt+1,width:Math.max(0.4,x1-x0),height:h-2,fill:modeColorOf(m)}); i=j+1; }
+    el('text',{x:GX0+4,y:yt+11,'font-size':9,'font-weight':'bold','font-family':CT,fill:'#0a1622'}).textContent='MODE';
+    y=yt+h+12; }
+  function panel(h, series, opt){ opt=opt||{}; const yt=y, yb=y+h;
+    let vs=[]; for(const S of series) for(const s of S.pts){ if(s.v!=null&&!isNaN(s.v)) vs.push(s.v); }
+    let lo=opt.ymin!=null?opt.ymin:Math.min(...vs), hi=opt.ymax!=null?opt.ymax:Math.max(...vs);
+    if(opt.zero!=null){ lo=Math.min(lo,opt.zero); hi=Math.max(hi,opt.zero); }
+    if(!(hi>lo)) hi=lo+1;
+    const yA=v=>yb-(v-lo)/(hi-lo)*h;
+    el('rect',{x:GX0,y:yt,width:GPW,height:h,fill:'#0a121c',stroke:'#1c2c3c','stroke-width':1});
+    if(opt.zero!=null) el('line',{x1:GX0,y1:yA(opt.zero),x2:GX1,y2:yA(opt.zero),stroke:'#33465a','stroke-width':1,'stroke-dasharray':'3 3'});
+    for(const S of series){ let d='',st=false;
+      for(const s of S.pts){ if(s.v==null||isNaN(s.v)){st=false;continue;} const px=gXAt(s.t),py=yA(s.v); d+=(st?'L':'M')+px.toFixed(1)+' '+py.toFixed(1)+' '; st=true; }
+      el('path',{d,fill:'none',stroke:S.color,'stroke-width':1.3}); }
+    let lx=GX0+5; for(const S of series){ el('text',{x:lx,y:yt+11,'font-size':10,'font-weight':'bold','font-family':CT,fill:S.color}).textContent=S.label; lx+=S.label.length*7.2+16; }
+    el('text',{x:GX0-3,y:yt+9,'text-anchor':'end','font-size':8,'font-family':CT,fill:'#6a86a0'}).textContent=fmtNum(hi);
+    el('text',{x:GX0-3,y:yb,'text-anchor':'end','font-size':8,'font-family':CT,fill:'#6a86a0'}).textContent=fmtNum(lo);
+    y=yb+12; }
+  panel(50, [{pts:elePts,color:'#8fbf6f',label:'標高 m'}]);
+  panel(46, [{pts:gradPts,color:'#c98fef',label:'勾配 %'}], {zero:0});
+  panel(50, [{pts:spdPts,color:'#00ff88',label:'車速 km/h'}], {ymin:0});
+  panel(62, [{pts:psysPts,color:'#ffaa00',label:'足軸P kW'},{pts:pbatPts,color:'#00e5ff',label:'電池P kW'}], {zero:0});
+  panel(50, [{pts:rpmPts,color:'#4a9eff',label:'ENG rpm'}], {ymin:0});
+  gCurBot=y-12;
+  for(let k=0;k<=5;k++){ const tt=T0+(T1-T0)*k/5, x=gXAt(tt);
+    el('line',{x1:x,y1:gCurTop,x2:x,y2:gCurBot,stroke:'#18242f','stroke-width':1});
+    el('text',{x:x,y:gCurBot+11,'text-anchor':k===0?'start':k===5?'end':'middle','font-size':8,'font-family':CT,fill:'#6a86a0'}).textContent=fmtT(tt); }
+  gCursor=el('line',{x1:gXAt(PT),y1:gCurTop,x2:gXAt(PT),y2:gCurBot,stroke:'#ff5544','stroke-width':1.4});
+}
+
 // ═══ 再生 ═════════════════════════════════════════════════
 const playBtn=document.getElementById('playBtn'), seek=document.getElementById('seek');
 function setPlay(p){ playing=p; playBtn.textContent=p?'❚❚':'▶'; if(p&&PT>=T1) PT=T0; lastRAF=0; }
@@ -479,6 +540,14 @@ document.querySelectorAll('.spd[data-s]').forEach(b=>b.onclick=()=>{
 const engBtn=document.getElementById('engBtn'), energyPanel=document.getElementById('energyPanel');
 engBtn.onclick=()=>{ drawSummary(); energyPanel.classList.toggle('on'); };
 energyPanel.onclick=e=>{ if(e.target===energyPanel) energyPanel.classList.remove('on'); };
+const graphBtn=document.getElementById('graphBtn'), graphPanel=document.getElementById('graphPanel'), graphSvg=document.getElementById('graphSvg');
+graphBtn.onclick=()=>{ graphOpen=!graphPanel.classList.contains('on'); if(graphOpen) drawGraph(); graphPanel.classList.toggle('on', graphOpen); };
+graphPanel.onclick=e=>{ if(e.target===graphPanel){ graphPanel.classList.remove('on'); graphOpen=false; } };
+let gseek=false;
+function gSeekAt(ev){ const r=graphSvg.getBoundingClientRect(); const sx=(ev.clientX-r.left)/r.width*600; const fr=Math.max(0,Math.min(1,(sx-GX0)/GPW)); PT=T0+fr*(T1-T0); render(PT); }
+graphSvg.addEventListener('pointerdown',e=>{ gseek=true; try{graphSvg.setPointerCapture(e.pointerId);}catch(_){}; gSeekAt(e); });
+graphSvg.addEventListener('pointermove',e=>{ if(gseek) gSeekAt(e); });
+graphSvg.addEventListener('pointerup',()=>{ gseek=false; });
 function tick(ts){
   if(playing){
     if(lastRAF) PT+=(ts-lastRAF)*speed;
