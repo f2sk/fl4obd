@@ -68,7 +68,7 @@
 <div id="app">
   <div class="tile" id="s2"><div class="map" id="map2"></div><div class="tag">ナビ</div><div class="hud" id="hud2"></div></div>
   <div class="tile" id="s1"><div class="map" id="map1"></div><div class="tag">俯瞰</div><div class="hud" id="hud1"></div>
-    <div class="mlegend"><i style="color:#00e5ff">■</i>EV <i style="color:#4a9eff">■</i>直列 <i style="color:#ff9a44">■</i>直結 <i style="color:#8aa0b4">■</i>遷移<br><span style="color:#7a95ad">線の太さ = 車速</span></div>
+    <div class="mlegend"><i style="color:#00e5ff">■</i>EV <i style="color:#4a9eff">■</i>直列 <i style="color:#ff9a44">■</i>直結<br><span style="color:#7a95ad">線の太さ = 車速（太いほど速い）</span></div>
   </div>
   <div class="tile" id="s3">
     <div class="tag">パワーフロー</div>
@@ -159,6 +159,18 @@ function obdAt(t){ if(!OBD.length) return null; const i=bsearch(OBD,t), a=OBD[i]
 // ═══ 地図構築 ═════════════════════════════════════════════
 function tiles(){ return L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   {maxZoom:19, attribution:'© OpenStreetMap'}); }
+// TRANS(10/30/60)を「次の安定モード=行先」へ寄せる(無ければ直前の安定モード)。
+// 実データ上、行先で見ればほぼ一意(30→EV, 60→DIR, 10はSER/DIR個別)。各サンプルに modeR を付与。
+function resolveModes(){
+  const stable=m=>(m===20||m===40||m===50||m===70);
+  const nextS=new Array(OBD.length); let ns=-1;
+  for(let i=OBD.length-1;i>=0;i--){ if(stable(OBD[i].mode)) ns=OBD[i].mode; nextS[i]=ns; }
+  let ps=-1;
+  for(let i=0;i<OBD.length;i++){
+    if(stable(OBD[i].mode)){ ps=OBD[i].mode; OBD[i].modeR=OBD[i].mode; }
+    else OBD[i].modeR = (nextS[i]>=0?nextS[i]:(ps>=0?ps:OBD[i].mode));
+  }
+}
 // 連続する (モード色, 車速幅) をまとめて run 化（polyline数を抑える）
 function buildRuns(){
   const runs=[]; let cur=null;
@@ -187,7 +199,7 @@ function addMarkers(map){
 }
 function buildMaps(){
   latlngs=GPS.map(p=>[p.lat,p.lon]);
-  segMeta=GPS.map(p=>{ const o=obdAt(p.t); return {mode:o?o.mode:-1, spd:o?o.vsp:0}; });
+  segMeta=GPS.map(p=>{ const o=obdAt(p.t); return {mode:o?(o.modeR??o.mode):-1, spd:o?o.vsp:0}; });
   if(map1){ map1.remove(); map2.remove(); }
   // 俯瞰(固定)
   map1=L.map('map1',{zoomControl:false, attributionControl:false, preferCanvas:true}); tiles().addTo(map1);
@@ -213,7 +225,7 @@ const D = {};   // drawFlow が参照する現在値
 const MODE_LABELS = { 20:'EV', 40:'SERIES', 50:'DIRECT', 70:'DIRECT', 60:'TRANS', 30:'TRANS', 10:'TRANS' };
 const MODE_COLOR  = { EV:'#00e5ff', SERIES:'#4a9eff', DIRECT:'#ff9a44', TRANS:'#8aa0b4' };
 function modeColorOf(mode){ return MODE_COLOR[MODE_LABELS[mode]] || '#8aa0b4'; }
-function spdWidth(v){ v=Math.max(0,Math.min(110,v||0)); return Math.round(3 + v/110*5); }   // 車速→線幅 3..8(整数)
+function spdWidth(v){ v=Math.max(0,Math.min(110,v||0)); return Math.round(2 + v/110*10); }  // 車速→線幅 2..12(俯瞰でも差が出るよう広め)
 const FNS='http://www.w3.org/2000/svg';
 function fEl(tag,attrs,parent){const e=document.createElementNS(FNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
 const FX_M='#ff9a44', FX_E='#00e5ff', FX_R='#25e0a0', FX_A='#c9a0ff';
@@ -309,10 +321,11 @@ function render(t){
   }
   const o=obdAt(t);
   if(o){
-    D.runMode=o.mode; D.dispMode=o.mode; D.peng=o.peng; D.pgen=o.pgen; D.pbat=o.pbat;
+    const mR=o.modeR??o.mode;
+    D.runMode=mR; D.dispMode=mR; D.peng=o.peng; D.pgen=o.pgen; D.pbat=o.pbat;
     D.pdrive=o.pdrive; D.engRot=o.rpm; D.vsp=o.vsp; D.soc=(o.soc==null?NaN:o.soc);
     drawFlow();
-    const hud=`${(MODE_LABELS[o.mode]||o.mode)}  ${o.vsp}km/h  ${Math.round(o.rpm)}rpm\nPsys ${o.psys.toFixed(1)}  Pbat ${o.pbat.toFixed(1)}kW`;
+    const hud=`${(MODE_LABELS[mR]||mR)}  ${o.vsp}km/h  ${Math.round(o.rpm)}rpm\nPsys ${o.psys.toFixed(1)}  Pbat ${o.pbat.toFixed(1)}kW`;
     document.getElementById('hud1').textContent=hud;
     document.getElementById('hud2').textContent=hud;
   }
@@ -395,7 +408,7 @@ function start(gpxText, txtText){
   if(!GPS.length){ document.getElementById('loadMsg').textContent='GPXにトラック点がありません'; return; }
   if(!OBD.length){ document.getElementById('loadMsg').textContent='フレームログに622920がありません'; return; }
   T0=Math.min(GPS[0].t, OBD[0].t); T1=Math.max(GPS[GPS.length-1].t, OBD[OBD.length-1].t); PT=T0;
-  computeEnergy();
+  resolveModes(); computeEnergy();
   document.getElementById('loader').style.display='none';
   document.getElementById('app').classList.add('on');
   buildMaps(); render(PT);
