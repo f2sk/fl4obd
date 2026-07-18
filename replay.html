@@ -55,9 +55,8 @@
   #energySvg { width:100%; height:auto; display:block; }
   #sumMetrics .mt.wide { grid-column:1/-1; }
   #modeSection { margin-top:12px; }
-  #modeSection .mlabel { color:#7a95ad; font-size:10px; margin-bottom:4px; text-align:center; }
-  #modeBar { display:flex; height:26px; border-radius:6px; overflow:hidden; border:1px solid #1c2c3c; }
-  #modeBar > div { display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:bold; color:#06121c; font-family:'Courier New',monospace; white-space:nowrap; }
+  #modeSection .mlabel { color:#7a95ad; font-size:10px; margin-bottom:2px; text-align:center; }
+  #modeSvg { width:100%; height:auto; display:block; }
 </style>
 </head>
 <body>
@@ -100,7 +99,7 @@
     <div id="sumTitle">走行サマリー</div>
     <div id="sumMetrics"></div>
     <svg id="energySvg" viewBox="0 0 300 262" preserveAspectRatio="xMidYMid meet"></svg>
-    <div id="modeSection"><div class="mlabel">走行中のモード配分（時間）</div><div id="modeBar"></div></div>
+    <div id="modeSection"><div class="mlabel">走行中のモード配分（上:時間 / 下:距離）</div><svg id="modeSvg" viewBox="0 0 300 116" preserveAspectRatio="xMidYMid meet"></svg></div>
   </div></div>
 </div>
 
@@ -368,7 +367,7 @@ function computeSummary(){
     d+=2*R*Math.asin(Math.sqrt(s)); }
   const km=d/1000, min=(T1-T0)/60000;
   // エネルギー積算 ＋ 走行中時間/モード配分
-  let drive=0, aux=0, engE=0, battNet=0, moveHr=0, ev=0, ser=0, dir=0;
+  let drive=0, aux=0, engE=0, battNet=0, moveHr=0, ev=0, ser=0, dir=0, evD=0, serD=0, dirD=0;
   for(let i=0;i<OBD.length-1;i++){
     let dt=(OBD[i+1].t-OBD[i].t)/3600000; if(dt<=0) continue; if(dt>3/3600) dt=3/3600; // 停止/欠測の穴は3秒で頭打ち
     const a=OBD[i], b=OBD[i+1];
@@ -376,9 +375,9 @@ function computeSummary(){
     aux    +=0.5*(auxOf(a)+auxOf(b))*dt;                        // AUX/AC
     engE   +=0.5*(Math.max(a.peng,0)+Math.max(b.peng,0))*dt;   // エンジン投入
     battNet+=0.5*(a.pbat+b.pbat)*dt;                            // 電池 正味放電(+)/充電(-)
-    if(a.vsp>=1){ moveHr+=dt;                                   // 走行中(vsp>=1)のモード滞在時間
+    if(a.vsp>=1){ moveHr+=dt; const dkm=a.vsp*dt;               // 走行中(vsp>=1) 時間(dt)と距離(vsp*dt)をモード別に
       const mr=a.modeR??a.mode;
-      if(mr===20) ev+=dt; else if(mr===40) ser+=dt; else if(mr===50||mr===70) dir+=dt; }
+      if(mr===20){ev+=dt;evD+=dkm;} else if(mr===40){ser+=dt;serD+=dkm;} else if(mr===50||mr===70){dir+=dt;dirD+=dkm;} }
   }
   const netUse=drive+aux;                 // 正味の消費エネルギー(出力側)
   const source=engE+battNet;              // 電費積算(ソース側=ENG+電池正味)
@@ -387,7 +386,7 @@ function computeSummary(){
   SUM={ km, min, moveMin: moveHr*60, kmhAll: hr>0?km/hr:0, kmhMove: moveHr>0?km/moveHr:0,
         drive, aux, netUse, source, regen,
         effWh: km>0?source/km*1000:0, effKm: source>0?km/source:0,
-        modeShare:{ev,ser,dir} };
+        modeShare:{ev,ser,dir}, modeDist:{ev:evD,ser:serD,dir:dirD} };
 }
 function metric(k,v,sub,wide){ return `<div class="mt${wide?' wide':''}"><span>${k}</span><b>${v}</b>${sub?`<i>${sub}</i>`:''}</div>`; }
 function drawSummary(){
@@ -397,12 +396,7 @@ function drawSummary(){
     metric('時間',    s.min.toFixed(0)+' 分',    '(走行 '+s.moveMin.toFixed(0)+' 分)')+
     metric('平均車速', s.kmhAll.toFixed(0)+' km/h', '(走行中 '+s.kmhMove.toFixed(0)+' km/h)')+
     metric('電費',    s.effWh.toFixed(0)+' Wh/km', s.effKm.toFixed(1)+' km/kWh');
-  // 走行中モード配分(横100%積み上げ)
-  const ms=s.modeShare, tot=(ms.ev+ms.ser+ms.dir)||1;
-  document.getElementById('modeBar').innerHTML =
-    [['EV',ms.ev,'#00e5ff'],['直列',ms.ser,'#4a9eff'],['直結',ms.dir,'#ff9a44']]
-    .map(([n,v,c])=>{ const pct=v/tot*100; if(pct<0.5) return '';
-      return `<div style="flex:0 0 ${pct}%;background:${c}">${pct>=12?n+' '+pct.toFixed(0)+'%':''}</div>`; }).join('');
+  drawModes();
   const svg=document.getElementById('energySvg'); while(svg.firstChild) svg.removeChild(svg.firstChild);
   const CT='Courier New', netUse=s.netUse, drive=s.drive, aux=s.aux, source=s.source, regen=s.regen;
   const top=54, bot=224, H=bot-top, pxk=H/(netUse||1), bw=58, LX=76, RX=166;
@@ -435,6 +429,31 @@ function drawSummary(){
   fEl('text',{x:LX+bw/2,y:bot+15,'text-anchor':'middle','font-size':10,'font-family':CT,fill:'#8aa0b4'},svg).textContent='消費';
   fEl('text',{x:RX+bw/2,y:bot+15,'text-anchor':'middle','font-size':10,'font-family':CT,fill:'#8aa0b4'},svg).textContent='内訳';
   fEl('text',{x:150,y:bot+32,'text-anchor':'middle','font-size':10,'font-family':CT,fill:'#7a95ad'},svg).textContent='消費 − 回生 = 電費（実消費）';
+}
+// 走行中モード配分: 時間(上)/距離(下)の2バーを、対応セグメントをリボンで結ぶスロープ図
+function drawModes(){
+  const ms=SUM.modeShare, md=SUM.modeDist;
+  const svg=document.getElementById('modeSvg'); while(svg.firstChild) svg.removeChild(svg.firstChild);
+  const CT='Courier New';
+  const parts=[['EV',ms.ev,md.ev,'#00e5ff'],['直列',ms.ser,md.ser,'#4a9eff'],['直結',ms.dir,md.dir,'#ff9a44']];
+  const totT=(ms.ev+ms.ser+ms.dir)||1, totD=(md.ev+md.ser+md.dir)||1;
+  const X0=6, W=288, yT1=16, yT2=31, yD1=85, yD2=100;
+  fEl('text',{x:X0,y:12,'font-size':9,'font-family':CT,fill:'#8aa0b4'},svg).textContent='時間';
+  fEl('text',{x:X0,y:113,'font-size':9,'font-family':CT,fill:'#8aa0b4'},svg).textContent='距離';
+  let cxT=X0, cxD=X0;
+  for(const [n,tv,dv,c] of parts){
+    const wT=tv/totT*W, wD=dv/totD*W, xT0=cxT, xT1=cxT+wT, xD0=cxD, xD1=cxD+wD;
+    fEl('path',{d:`M${xT0.toFixed(1)} ${yT2} L${xT1.toFixed(1)} ${yT2} L${xD1.toFixed(1)} ${yD1} L${xD0.toFixed(1)} ${yD1} Z`,fill:c,opacity:0.22},svg);  // リボン
+    if(wT>0.3) fEl('rect',{x:xT0,y:yT1,width:wT,height:yT2-yT1,fill:c},svg);   // 時間バー(上)
+    if(wD>0.3) fEl('rect',{x:xD0,y:yD1,width:wD,height:yD2-yD1,fill:c},svg);   // 距離バー(下)
+    const pctT=tv/totT*100, pctD=dv/totD*100;
+    if(pctT>=4||pctD>=4){
+      const mx=((xT0+xT1)/2+(xD0+xD1)/2)/2;
+      fEl('text',{x:mx,y:54,'text-anchor':'middle','font-size':11,'font-weight':'bold','font-family':CT,fill:'#e6eef7'},svg).textContent=n;
+      fEl('text',{x:mx,y:67,'text-anchor':'middle','font-size':10,'font-family':CT,fill:'#aab8c6'},svg).textContent=pctT.toFixed(0)+' / '+pctD.toFixed(0)+'%';
+    }
+    cxT=xT1; cxD=xD1;
+  }
 }
 
 // ═══ 再生 ═════════════════════════════════════════════════
