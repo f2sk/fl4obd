@@ -481,6 +481,14 @@ function tick(ts){
 }
 requestAnimationFrame(tick);
 
+// ═══ スリープ防止 (Screen Wake Lock) ═════════════════════
+let wakeLock=null;
+async function requestWakeLock(){ if(!('wakeLock' in navigator)) return;
+  try{ wakeLock=await navigator.wakeLock.request('screen'); }catch(e){} }
+document.addEventListener('visibilitychange', ()=>{   // 復帰時に解放されたロックを再取得
+  if(document.visibilityState==='visible' && document.getElementById('app').classList.contains('on')) requestWakeLock();
+});
+
 // ═══ ロード ═══════════════════════════════════════════════
 function start(gpxText, txtText){
   GPS=parseGpx(gpxText); OBD=parseFrames(txtText);
@@ -490,7 +498,7 @@ function start(gpxText, txtText){
   resolveModes(); computeSummary();
   document.getElementById('loader').style.display='none';
   document.getElementById('app').classList.add('on');
-  buildMaps(); render(PT);
+  buildMaps(); render(PT); requestWakeLock();
 }
 document.getElementById('loadBtn').onclick=()=>{
   const g=document.getElementById('fGpx').files[0], t=document.getElementById('fTxt').files[0];
