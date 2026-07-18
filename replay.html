@@ -360,7 +360,7 @@ function render(t){
     document.getElementById('hud2').textContent=hud;
   }
   document.getElementById('tlabel').textContent=fmtAbs(t)+'  '+fmtT(t)+'/'+fmtT(T1);
-  if(graphOpen && gCursor){ const cx=gXAt(t); gCursor.setAttribute('x1',cx); gCursor.setAttribute('x2',cx); }  // グラフ縦カーソル同期
+  if(graphOpen && gCursor){ const inw=t>=vT0&&t<=vT1, cx=inw?gXAt(t):-99; gCursor.setAttribute('x1',cx); gCursor.setAttribute('x2',cx); }  // グラフ縦カーソル同期(窓外は隠す)
   document.getElementById('seek').value=Math.round((t-T0)/(T1-T0)*1000)||0;
 }
 
@@ -476,57 +476,68 @@ function drawModes(){
 
 // ═══ グラフ (時系列: モード/標高/勾配/車速/足軸P・電池P/ENGrpm) ═══
 const GX0=46, GX1=592, GPW=GX1-GX0;
-const gXAt=t=>GX0+(t-T0)/((T1-T0)||1)*GPW;
+let vT0=0, vT1=0;                                    // グラフ表示の時間窓(ピンチズーム)
+const gXAt=t=>GX0+(t-vT0)/((vT1-vT0)||1)*GPW;
+const gCx=v=>v<GX0?GX0:(v>GX1?GX1:v);               // プロット域にクランプ
 const gHav=(a,b)=>{const R=6371000,rad=x=>x*Math.PI/180;const dp=rad(b.lat-a.lat),dl=rad(b.lon-a.lon);const s=Math.sin(dp/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dl/2)**2;return 2*R*Math.asin(Math.sqrt(s));};
-let graphOpen=false, gCursor=null, gCurTop=14, gCurBot=360;
-function drawGraph(){
-  const svg=document.getElementById('graphSvg'); while(svg.firstChild) svg.removeChild(svg.firstChild);
-  const CT='Courier New', el=(t,a)=>fEl(t,a,svg);
-  const fmtNum=v=>Math.abs(v)>=100?(''+Math.round(v)):(''+(Math.round(v*10)/10));
-  // 勾配: 標高の~40m基線スロープ(生GPS標高のノイズを平滑)
+let graphOpen=false, gCursor=null, gCurTop=14, gCurBot=360, GSER=null;
+// 系列を一度だけ算出してキャッシュ(ピンチ毎の再計算を避ける)
+function buildGraphSeries(){
   const cum=[0]; for(let i=1;i<GPS.length;i++) cum[i]=cum[i-1]+gHav(GPS[i-1],GPS[i]);
   const eleSm=GPS.map((p,i)=>{ if(p.ele==null) return null; let s=0,n=0;   // 標高を距離窓±30mで平滑(GPS標高のスパイク除去)
     for(let j=i;j>=0&&cum[i]-cum[j]<=30;j--){ if(GPS[j].ele!=null){s+=GPS[j].ele;n++;} }
     for(let j=i+1;j<GPS.length&&cum[j]-cum[i]<=30;j++){ if(GPS[j].ele!=null){s+=GPS[j].ele;n++;} }
     return n?s/n:p.ele; });
   const gradPts=GPS.map((p,i)=>{ let j=i; while(j>0&&cum[i]-cum[j]<60)j--; const dd=cum[i]-cum[j]; const de=(eleSm[i]!=null&&eleSm[j]!=null)?eleSm[i]-eleSm[j]:0; return {t:p.t,v:dd>1?de/dd*100:0}; });  // 60m基線スロープ
-  const elePts=GPS.filter(p=>p.ele!=null).map(p=>({t:p.t,v:p.ele}));
-  const spdPts=OBD.map(o=>({t:o.t,v:o.vsp})), psysPts=OBD.map(o=>({t:o.t,v:o.psys}));
-  const pbatPts=OBD.map(o=>({t:o.t,v:o.pbat})), rpmPts=OBD.map(o=>({t:o.t,v:o.rpm}));
+  GSER={ elePts:GPS.filter(p=>p.ele!=null).map(p=>({t:p.t,v:p.ele})), gradPts,
+         spdPts:OBD.map(o=>({t:o.t,v:o.vsp})), psysPts:OBD.map(o=>({t:o.t,v:o.psys})),
+         pbatPts:OBD.map(o=>({t:o.t,v:o.pbat})), rpmPts:OBD.map(o=>({t:o.t,v:o.rpm})) };
+}
+// 時間窓[vT0,vT1]に絞り~1000点へ間引き(両端に境界点)
+function gWin(pts){ let left=null,right=null; const inw=[];
+  for(const s of pts){ if(s.t<vT0) left=s; else if(s.t>vT1){ right=s; break; } else inw.push(s); }
+  const arr=(left?[left]:[]).concat(inw, right?[right]:[]); const N=arr.length, step=Math.max(1,Math.ceil(N/1000));
+  if(step<=1) return arr; const out=[]; for(let i=0;i<N;i+=step) out.push(arr[i]); if(N&&out[out.length-1]!==arr[N-1]) out.push(arr[N-1]); return out; }
+function drawGraph(){
+  const svg=document.getElementById('graphSvg'); while(svg.firstChild) svg.removeChild(svg.firstChild);
+  const CT='Courier New', el=(t,a)=>fEl(t,a,svg);
+  const fmtNum=v=>Math.abs(v)>=100?(''+Math.round(v)):(''+(Math.round(v*10)/10));
+  if(!GSER) buildGraphSeries();
   let y=14;
-  // モード帯(連続runをまとめて矩形)
+  // モード帯(窓内runをまとめて矩形, クランプ)
   { const h=16, yt=y; el('rect',{x:GX0,y:yt,width:GPW,height:h,fill:'#0a121c',stroke:'#1c2c3c','stroke-width':1});
     let i=0; while(i<OBD.length-1){ const m=(OBD[i].modeR??OBD[i].mode); let j=i;
       while(j+1<OBD.length && (OBD[j+1].modeR??OBD[j+1].mode)===m) j++;
-      const x0=gXAt(OBD[i].t), x1=gXAt(OBD[Math.min(j+1,OBD.length-1)].t);
-      el('rect',{x:x0,y:yt+1,width:Math.max(0.4,x1-x0),height:h-2,fill:modeColorOf(m)}); i=j+1; }
+      const x0=gCx(gXAt(OBD[i].t)), x1=gCx(gXAt(OBD[Math.min(j+1,OBD.length-1)].t));
+      if(x1>x0+0.1) el('rect',{x:x0,y:yt+1,width:x1-x0,height:h-2,fill:modeColorOf(m)}); i=j+1; }
     el('text',{x:GX0+4,y:yt+11,'font-size':9,'font-weight':'bold','font-family':CT,fill:'#0a1622'}).textContent='MODE';
     y=yt+h+12; }
   function panel(h, series, opt){ opt=opt||{}; const yt=y, yb=y+h;
-    let vs=[]; for(const S of series) for(const s of S.pts){ if(s.v!=null&&!isNaN(s.v)) vs.push(s.v); }
-    let lo=opt.ymin!=null?opt.ymin:Math.min(...vs), hi=opt.ymax!=null?opt.ymax:Math.max(...vs);
+    const wps=series.map(S=>gWin(S.pts));
+    let vs=[]; for(const wp of wps) for(const s of wp){ if(s.v!=null&&!isNaN(s.v)) vs.push(s.v); }
+    let lo=opt.ymin!=null?opt.ymin:(vs.length?Math.min(...vs):0), hi=opt.ymax!=null?opt.ymax:(vs.length?Math.max(...vs):1);
     if(opt.zero!=null){ lo=Math.min(lo,opt.zero); hi=Math.max(hi,opt.zero); }
     if(!(hi>lo)) hi=lo+1;
     const yA=v=>yb-(v-lo)/(hi-lo)*h;
     el('rect',{x:GX0,y:yt,width:GPW,height:h,fill:'#0a121c',stroke:'#1c2c3c','stroke-width':1});
     if(opt.zero!=null) el('line',{x1:GX0,y1:yA(opt.zero),x2:GX1,y2:yA(opt.zero),stroke:'#33465a','stroke-width':1,'stroke-dasharray':'3 3'});
-    for(const S of series){ let d='',st=false;
-      for(const s of S.pts){ if(s.v==null||isNaN(s.v)){st=false;continue;} const px=gXAt(s.t),py=yA(s.v); d+=(st?'L':'M')+px.toFixed(1)+' '+py.toFixed(1)+' '; st=true; }
-      el('path',{d,fill:'none',stroke:S.color,'stroke-width':1.3}); }
+    series.forEach((S,si)=>{ let d='',st=false; for(const s of wps[si]){ if(s.v==null||isNaN(s.v)){st=false;continue;} const px=gCx(gXAt(s.t)),py=yA(s.v); d+=(st?'L':'M')+px.toFixed(1)+' '+py.toFixed(1)+' '; st=true; }
+      el('path',{d,fill:'none',stroke:S.color,'stroke-width':1.3}); });
     let lx=GX0+5; for(const S of series){ el('text',{x:lx,y:yt+11,'font-size':10,'font-weight':'bold','font-family':CT,fill:S.color}).textContent=S.label; lx+=S.label.length*7.2+16; }
     el('text',{x:GX0-3,y:yt+9,'text-anchor':'end','font-size':8,'font-family':CT,fill:'#6a86a0'}).textContent=fmtNum(hi);
     el('text',{x:GX0-3,y:yb,'text-anchor':'end','font-size':8,'font-family':CT,fill:'#6a86a0'}).textContent=fmtNum(lo);
     y=yb+12; }
-  panel(50, [{pts:elePts,color:'#8fbf6f',label:'標高 m'}]);
-  panel(46, [{pts:gradPts,color:'#c98fef',label:'勾配 %'}], {zero:0});
-  panel(50, [{pts:spdPts,color:'#00ff88',label:'車速 km/h'}], {ymin:0});
-  panel(62, [{pts:psysPts,color:'#ffaa00',label:'足軸P kW'},{pts:pbatPts,color:'#00e5ff',label:'電池P kW'}], {zero:0});
-  panel(50, [{pts:rpmPts,color:'#4a9eff',label:'ENG rpm'}], {ymin:0});
+  panel(50, [{pts:GSER.elePts,color:'#8fbf6f',label:'標高 m'}]);
+  panel(46, [{pts:GSER.gradPts,color:'#c98fef',label:'勾配 %'}], {zero:0});
+  panel(50, [{pts:GSER.spdPts,color:'#00ff88',label:'車速 km/h'}], {ymin:0});
+  panel(62, [{pts:GSER.psysPts,color:'#ffaa00',label:'足軸P kW'},{pts:GSER.pbatPts,color:'#00e5ff',label:'電池P kW'}], {zero:0});
+  panel(50, [{pts:GSER.rpmPts,color:'#4a9eff',label:'ENG rpm'}], {ymin:0});
   gCurBot=y-12;
-  for(let k=0;k<=5;k++){ const tt=T0+(T1-T0)*k/5, x=gXAt(tt);
+  for(let k=0;k<=5;k++){ const tt=vT0+(vT1-vT0)*k/5, x=gXAt(tt);
     el('line',{x1:x,y1:gCurTop,x2:x,y2:gCurBot,stroke:'#18242f','stroke-width':1});
     el('text',{x:x,y:gCurBot+11,'text-anchor':k===0?'start':k===5?'end':'middle','font-size':8,'font-family':CT,fill:'#6a86a0'}).textContent=fmtT(tt); }
-  gCursor=el('line',{x1:gXAt(PT),y1:gCurTop,x2:gXAt(PT),y2:gCurBot,stroke:'#ff5544','stroke-width':1.4});
+  const cxp=(PT>=vT0&&PT<=vT1)?gXAt(PT):-99;
+  gCursor=el('line',{x1:cxp,y1:gCurTop,x2:cxp,y2:gCurBot,stroke:'#ff5544','stroke-width':1.4});
 }
 
 // ═══ 再生 ═════════════════════════════════════════════════
@@ -541,13 +552,27 @@ const engBtn=document.getElementById('engBtn'), energyPanel=document.getElementB
 engBtn.onclick=()=>{ drawSummary(); energyPanel.classList.toggle('on'); };
 energyPanel.onclick=e=>{ if(e.target===energyPanel) energyPanel.classList.remove('on'); };
 const graphBtn=document.getElementById('graphBtn'), graphPanel=document.getElementById('graphPanel'), graphSvg=document.getElementById('graphSvg');
-graphBtn.onclick=()=>{ graphOpen=!graphPanel.classList.contains('on'); if(graphOpen) drawGraph(); graphPanel.classList.toggle('on', graphOpen); };
+graphBtn.onclick=()=>{ graphOpen=!graphPanel.classList.contains('on'); if(graphOpen){ vT0=T0; vT1=T1; drawGraph(); } graphPanel.classList.toggle('on', graphOpen); };
 graphPanel.onclick=e=>{ if(e.target===graphPanel){ graphPanel.classList.remove('on'); graphOpen=false; } };
-let gseek=false;
-function gSeekAt(ev){ const r=graphSvg.getBoundingClientRect(); const sx=(ev.clientX-r.left)/r.width*600; const fr=Math.max(0,Math.min(1,(sx-GX0)/GPW)); PT=T0+fr*(T1-T0); render(PT); }
-graphSvg.addEventListener('pointerdown',e=>{ gseek=true; try{graphSvg.setPointerCapture(e.pointerId);}catch(_){}; gSeekAt(e); });
-graphSvg.addEventListener('pointermove',e=>{ if(gseek) gSeekAt(e); });
-graphSvg.addEventListener('pointerup',()=>{ gseek=false; });
+// 1本指=タップ/ドラッグでシーク、2本指=左右ピンチで時間軸ズーム(＋パン)
+const gPtr=new Map(); let gseek=false, gPinch=null;
+const gSvgX=cx=>{ const r=graphSvg.getBoundingClientRect(); return (cx-r.left)/r.width*600; };
+function gSeekAt(ev){ const fr=Math.max(0,Math.min(1,(gSvgX(ev.clientX)-GX0)/GPW)); PT=vT0+fr*(vT1-vT0); render(PT); }
+function gPinchSt(){ const xs=[...gPtr.values()].map(gSvgX); const a=Math.min(xs[0],xs[1]), b=Math.max(xs[0],xs[1]); return {dist:Math.max(1,b-a), mid:(a+b)/2}; }
+graphSvg.addEventListener('pointerdown',e=>{ gPtr.set(e.pointerId,e.clientX); try{graphSvg.setPointerCapture(e.pointerId);}catch(_){}
+  if(gPtr.size===1){ gseek=true; gSeekAt(e); } else { gseek=false; gPinch=gPinchSt(); } });
+graphSvg.addEventListener('pointermove',e=>{ if(!gPtr.has(e.pointerId)) return; gPtr.set(e.pointerId,e.clientX);
+  if(gPtr.size>=2){ const stt=gPinchSt();
+    if(gPinch){ const span=vT1-vT0, midT=vT0+(gPinch.mid-GX0)/GPW*span;   // 直前の指中心が指す時刻
+      let ns=Math.max(5000,Math.min(T1-T0, span*(gPinch.dist/stt.dist))); // 指が開く=窓が縮む=拡大。下限5秒
+      let v0=midT-(stt.mid-GX0)/GPW*ns, v1=v0+ns;                          // その時刻を現在の指中心へ(ズーム＋パン)
+      if(v0<T0){v0=T0;v1=T0+ns;} if(v1>T1){v1=T1;v0=T1-ns;}
+      vT0=v0; vT1=v1; drawGraph(); }
+    gPinch=stt; }
+  else if(gseek){ gSeekAt(e); } });
+function gUp(e){ gPtr.delete(e.pointerId); if(gPtr.size<2) gPinch=null; if(gPtr.size===0) gseek=false; }
+graphSvg.addEventListener('pointerup',gUp);
+graphSvg.addEventListener('pointercancel',gUp);
 function tick(ts){
   if(playing){
     if(lastRAF) PT+=(ts-lastRAF)*speed;
@@ -573,7 +598,7 @@ function start(gpxText, txtText){
   if(!GPS.length){ document.getElementById('loadMsg').textContent='GPXにトラック点がありません'; return; }
   if(!OBD.length){ document.getElementById('loadMsg').textContent='フレームログに622920がありません'; return; }
   T0=Math.min(GPS[0].t, OBD[0].t); T1=Math.max(GPS[GPS.length-1].t, OBD[OBD.length-1].t); PT=T0;
-  resolveModes(); computeSummary();
+  resolveModes(); computeSummary(); GSER=null;
   try{ const p=new Intl.DateTimeFormat('en-US',{timeZoneName:'short',hour:'2-digit'}).formatToParts(new Date(T0)).find(x=>x.type==='timeZoneName'); TZ=p?p.value:''; }catch(e){ TZ=''; }
   document.getElementById('loader').style.display='none';
   document.getElementById('app').classList.add('on');
