@@ -592,6 +592,9 @@ graphSvg.addEventListener('pointermove',e=>{ if(!gPtr.has(e.pointerId)) return; 
 function gUp(e){ gPtr.delete(e.pointerId); if(gPtr.size<2) gPinch=null; }
 graphSvg.addEventListener('pointerup',gUp);
 graphSvg.addEventListener('pointercancel',gUp);
+// デスクトップ: ホイールで時間軸ズーム。Macのトラックパッドのピンチも Chrome では wheel(+ctrl) として届くので両対応。中心=赤線固定。
+graphSvg.addEventListener('wheel',e=>{ if(!graphOpen) return; e.preventDefault();
+  gSpan=Math.max(5000,Math.min(T1-T0, gSpan*Math.exp(e.deltaY*0.001))); drawGraph(); }, {passive:false});
 function tick(ts){
   if(playing){
     if(lastRAF) PT+=(ts-lastRAF)*speed;
