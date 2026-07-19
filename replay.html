@@ -506,13 +506,12 @@ function ptsRange(pts){
   if(!(hi>=lo)){ lo=0; hi=1; }
   r=[lo,hi]; _rangeCache.set(pts,r); return r;
 }
-// 系列の時刻t(=赤線/現在時刻)での値。非null点で線形補間。ラベル横の現在値表示用。
+// 系列の時刻t(=赤線/現在時刻)での直近値(sample-and-hold, t以前の最新の非null点)。ラベル横の現在値表示用。
+// 線形補間はサンプル間で常時動いてチラつくため不使用。
 function valueAt(pts,t){
-  let prev=null;
-  for(const s of pts){ if(s.v==null||isNaN(s.v)) continue;
-    if(s.t>=t){ if(!prev) return s.v; const f=(t-prev.t)/((s.t-prev.t)||1); return prev.v+(s.v-prev.v)*f; }
-    prev=s; }
-  return prev?prev.v:null;
+  let v=null;
+  for(const s of pts){ if(s.t>t) break; if(s.v!=null&&!isNaN(s.v)) v=s.v; }
+  return v;
 }
 // 時間窓[vT0,vT1]に絞り~1000点へ間引き(両端に境界点)
 function gWin(pts){ let left=null,right=null; const inw=[];
