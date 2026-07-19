@@ -99,7 +99,7 @@
     <span class="spd" id="graphBtn">📈 グラフ</span>
     <span id="tlabel">--:-- / --:--</span>
   </div>
-  <div id="graphPanel"><div id="graphCard"><svg id="graphSvg" viewBox="0 0 600 384" preserveAspectRatio="xMidYMid meet"></svg></div></div>
+  <div id="graphPanel"><div id="graphCard"><svg id="graphSvg" viewBox="0 0 600 436" preserveAspectRatio="xMidYMid meet"></svg></div></div>
   <div id="energyPanel"><div id="sumCard">
     <div id="sumTitle">走行サマリー</div>
     <div id="sumMetrics"></div>
@@ -494,7 +494,17 @@ function buildGraphSeries(){
     runs.push({t0:OBD[i].t, t1:OBD[Math.min(j+1,OBD.length-1)].t, m}); i=j+1; } }
   GSER={ elePts:GPS.filter(p=>p.ele!=null).map(p=>({t:p.t,v:p.ele})), gradPts,
          spdPts:OBD.map(o=>({t:o.t,v:o.vsp})), psysPts:OBD.map(o=>({t:o.t,v:o.psys})),
-         pbatPts:OBD.map(o=>({t:o.t,v:o.pbat})), rpmPts:OBD.map(o=>({t:o.t,v:o.rpm})), runs };
+         pbatPts:OBD.map(o=>({t:o.t,v:o.pbat})), rpmPts:OBD.map(o=>({t:o.t,v:o.rpm})),
+         socPts:OBD.map(o=>({t:o.t,v:o.soc})), runs };
+}
+// 系列の全区間 min/max をキャッシュ。スケールを表示窓に依存させない＝再生中の縦ガタつき防止。
+const _rangeCache=new WeakMap();
+function ptsRange(pts){
+  let r=_rangeCache.get(pts); if(r) return r;
+  let lo=Infinity,hi=-Infinity;
+  for(const s of pts){ if(s.v!=null&&!isNaN(s.v)){ if(s.v<lo)lo=s.v; if(s.v>hi)hi=s.v; } }
+  if(!(hi>=lo)){ lo=0; hi=1; }
+  r=[lo,hi]; _rangeCache.set(pts,r); return r;
 }
 // 時間窓[vT0,vT1]に絞り~1000点へ間引き(両端に境界点)
 function gWin(pts){ let left=null,right=null; const inw=[];
@@ -515,9 +525,10 @@ function drawGraph(){
     el('text',{x:GX0+4,y:yt+11,'font-size':9,'font-weight':'bold','font-family':CT,fill:'#0a1622'}).textContent='MODE';
     y=yt+h+12; }
   function panel(h, series, opt){ opt=opt||{}; const yt=y, yb=y+h;
-    const wps=series.map(S=>gWin(S.pts));
-    let vs=[]; for(const wp of wps) for(const s of wp){ if(s.v!=null&&!isNaN(s.v)) vs.push(s.v); }
-    let lo=opt.ymin!=null?opt.ymin:(vs.length?Math.min(...vs):0), hi=opt.ymax!=null?opt.ymax:(vs.length?Math.max(...vs):1);
+    const wps=series.map(S=>gWin(S.pts));            // 描画は窓内のみ(点数削減)
+    let glo=Infinity,ghi=-Infinity;                  // スケールは全区間の範囲で固定(窓依存の縦ガタつき防止)
+    for(const S of series){ const r=ptsRange(S.pts); if(r[0]<glo)glo=r[0]; if(r[1]>ghi)ghi=r[1]; }
+    let lo=opt.ymin!=null?opt.ymin:glo, hi=opt.ymax!=null?opt.ymax:ghi;
     if(opt.zero!=null){ lo=Math.min(lo,opt.zero); hi=Math.max(hi,opt.zero); }
     if(!(hi>lo)) hi=lo+1;
     const yA=v=>yb-(v-lo)/(hi-lo)*h;
@@ -533,6 +544,7 @@ function drawGraph(){
   panel(46, [{pts:GSER.gradPts,color:'#c98fef',label:'勾配 %'}], {zero:0});
   panel(50, [{pts:GSER.spdPts,color:'#00ff88',label:'車速 km/h'}], {ymin:0});
   panel(62, [{pts:GSER.psysPts,color:'#ffaa00',label:'足軸P kW'},{pts:GSER.pbatPts,color:'#00e5ff',label:'電池P kW'}], {zero:0});
+  panel(50, [{pts:GSER.socPts,color:'#ffd24a',label:'SOC %'}]);
   panel(50, [{pts:GSER.rpmPts,color:'#4a9eff',label:'ENG rpm'}], {ymin:0});
   gCurBot=y-12;
   for(let k=0;k<=5;k++){ const tt=vT0+(vT1-vT0)*k/5, x=gXAt(tt);
