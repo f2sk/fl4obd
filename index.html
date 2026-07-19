@@ -288,6 +288,7 @@ body{background:#070b0f;color:#c8d8e8;font-family:'Courier New',monospace;min-he
 
 <div style="display:flex;gap:6px;margin-bottom:0;">
   <button class="conn-btn" id="gpsBtn" onclick="toggleGps()" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;">[ GPS ]</button>
+  <button class="conn-btn" id="imuBtn" onclick="toggleImu()" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;">[ IMU ]</button>
   <button class="conn-btn" id="demoBtn" onclick="toggleDemo()" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;">[ DEMO ]</button>
   <a href="viewer.html" target="_blank" class="conn-btn" style="background:#0d1520;border-color:#1a3a5a;color:#2a5a7a;font-size:10px;text-decoration:none;display:flex;align-items:center;justify-content:center;">[ LOG VIEWER ]</a>
 </div>
@@ -327,11 +328,13 @@ function toggleRec() {
     btn.classList.add('rec');
     log('--- REC START ---', 'ok');
     syncGpsRecording();
+    syncImuRecording();
   } else {
     logRecording = false;
     btn.textContent = '● REC';
     btn.classList.remove('rec');
     syncGpsRecording();
+    syncImuRecording();
     if (logBuffer.length === 0) return;
     const lines = logBuffer.map(e => `[${e.ts}] [${(e.cls||'   ').padEnd(3)}] ${e.msg}`);
     const text = 'FL4 OBD MONITOR LOG\n' +
@@ -421,6 +424,100 @@ function toggleGps() {
   gpsEnabled = localStorage.getItem('gpsLog') === '1';
   const btn = document.getElementById('gpsBtn');
   if (btn && gpsEnabled) { btn.style.borderColor = '#ffaa00'; btn.style.color = '#ffaa00'; }
+})();
+
+// ─── IMU (加速度/ジャイロ CSV記録) ───────────────────────
+// トグルON時、REC録画中に devicemotion を購読し生サンプルを溜め、
+// 録画終了時に CSV を書き出す。時刻は toISOString() で他ログ(GPX/.txt)と共通。
+// 車両座標化・慣性/勾配分離・融合は後段(replay/解析)でやる前提＝ここは生データのみ。
+let imuEnabled = false;   // IMU(CSV)記録トグル。localStorage 永続
+let imuBuffer  = [];      // 生 devicemotion サンプル
+
+function onMotion(e) {
+  const ag = e.accelerationIncludingGravity || {};
+  const a  = e.acceleration || {};
+  const r  = e.rotationRate || {};
+  imuBuffer.push({
+    t: new Date().toISOString(),                 // UTC。GPX/.txt と同基準
+    agx: ag.x, agy: ag.y, agz: ag.z,             // 重力込み加速度 [m/s^2]
+    ax: a.x,  ay: a.y,  az: a.z,                 // OS重力除去済み加速度 [m/s^2]
+    rx: r.alpha, ry: r.beta, rz: r.gamma,        // 角速度 [deg/s]
+    dt: e.interval                                // サンプル間隔 [ms]
+  });
+}
+
+// iOS13+ は要許可、Android(対象)は requestPermission 自体が無い＝そのまま許可扱い
+function requestMotionPerm() {
+  if (typeof DeviceMotionEvent !== 'undefined' &&
+      typeof DeviceMotionEvent.requestPermission === 'function') {
+    return DeviceMotionEvent.requestPermission().catch(() => 'denied');
+  }
+  return Promise.resolve('granted');
+}
+
+function startImu() {
+  if (!imuEnabled) return;
+  if (typeof DeviceMotionEvent === 'undefined') { log('IMU: 非対応ブラウザ', 'err'); return; }
+  imuBuffer = [];
+  window.addEventListener('devicemotion', onMotion);
+  log('--- IMU START ---', 'ok');
+}
+function stopImu() {
+  window.removeEventListener('devicemotion', onMotion);
+}
+
+function imuNum(v, d) { return (v == null || isNaN(v)) ? '' : v.toFixed(d); }
+
+function exportImuCsv() {
+  if (imuBuffer.length === 0) return;
+  const head = 't_iso,agx,agy,agz,ax,ay,az,rx,ry,rz,interval';
+  const rows = imuBuffer.map(s =>
+    s.t + ',' +
+    imuNum(s.agx,4)+','+imuNum(s.agy,4)+','+imuNum(s.agz,4)+','+
+    imuNum(s.ax,4)+','+imuNum(s.ay,4)+','+imuNum(s.az,4)+','+
+    imuNum(s.rx,3)+','+imuNum(s.ry,3)+','+imuNum(s.rz,3)+','+
+    imuNum(s.dt,1));
+  const csv = '# fl4obd IMU log (raw)\n' +
+    '# t_iso=UTC(toISOString) / ag=accelIncludingGravity[m/s^2] / a=acceleration[m/s^2] / r=rotationRate[deg/s] / interval[ms]\n' +
+    head + '\n' + rows.join('\n') + '\n';
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = 'fl4obd_imu_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  log('IMU ' + imuBuffer.length + ' samples 保存', 'ok');
+  imuBuffer = [];
+}
+
+// REC開始/終了に同期: 録画中は収集、停止で CSV 書き出し
+function syncImuRecording() {
+  if (recordingActive()) { if (imuEnabled) startImu(); }
+  else { stopImu(); if (imuEnabled) exportImuCsv(); }
+}
+
+function toggleImu() {
+  imuEnabled = !imuEnabled;
+  localStorage.setItem('imuLog', imuEnabled ? '1' : '0');
+  const btn = document.getElementById('imuBtn');
+  if (btn) { btn.style.borderColor = imuEnabled ? '#ffaa00' : '#1a3a5a';
+             btn.style.color       = imuEnabled ? '#ffaa00' : '#2a5a7a'; }
+  log('IMU記録: ' + (imuEnabled ? 'ON' : 'OFF'), 'ok');
+  if (imuEnabled) {
+    requestMotionPerm().then(st => {
+      if (st !== 'granted') log('IMU: センサ許可が下りず', 'err');
+      else if (recordingActive()) startImu();
+    });
+  } else {
+    stopImu();
+  }
+}
+
+(function initImu() {
+  imuEnabled = localStorage.getItem('imuLog') === '1';
+  const btn = document.getElementById('imuBtn');
+  if (btn && imuEnabled) { btn.style.borderColor = '#ffaa00'; btn.style.color = '#ffaa00'; }
 })();
 
 // ─── SVGメーター描画ヘルパー ──────────────────────────────
