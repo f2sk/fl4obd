@@ -90,6 +90,8 @@
   </div>
   <div id="ctrl">
     <button id="playBtn">▶</button>
+    <span class="spd" id="back5">« 5s</span>
+    <span class="spd" id="fwd10">10s »</span>
     <input type="range" id="seek" min="0" max="1000" value="0">
     <span class="spd on" data-s="1">1x</span>
     <span class="spd" data-s="2">2x</span>
@@ -578,6 +580,9 @@ const playBtn=document.getElementById('playBtn'), seek=document.getElementById('
 function setPlay(p){ playing=p; playBtn.textContent=p?'❚❚':'▶'; if(p&&PT>=T1) PT=T0; lastRAF=0; }
 playBtn.onclick=()=>setPlay(!playing);
 seek.oninput=()=>{ PT=T0+(+seek.value/1000)*(T1-T0); render(PT); };
+function skip(dt){ PT=Math.max(T0,Math.min(T1,PT+dt)); seek.value=(T1>T0?(PT-T0)/(T1-T0)*1000:0); render(PT); }  // ±秒ジャンプ(再生中/停止中とも)
+document.getElementById('back5').onclick=()=>skip(-5000);
+document.getElementById('fwd10').onclick=()=>skip(10000);
 document.querySelectorAll('.spd[data-s]').forEach(b=>b.onclick=()=>{
   speed=+b.dataset.s; document.querySelectorAll('.spd[data-s]').forEach(x=>x.classList.remove('on')); b.classList.add('on');
 });
